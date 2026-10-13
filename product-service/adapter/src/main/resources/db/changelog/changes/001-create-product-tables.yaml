@@ -1,0 +1,217 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-products-table
+      author: estore
+      comment: "Creates the products table"
+      changes:
+        - createTable:
+            tableName: products
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_products
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: type
+                  type: VARCHAR(50)
+              - column:
+                  name: description
+                  type: VARCHAR(2000)
+              - column:
+                  name: base_price_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: base_price_currency
+                  type: VARCHAR(3)
+      rollback:
+        - dropTable:
+            tableName: products
+
+  - changeSet:
+      id: 002-create-product-attributes-table
+      author: estore
+      comment: "Creates the product_attributes element-collection table"
+      changes:
+        - createTable:
+            tableName: product_attributes
+            columns:
+              - column:
+                  name: product_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_product_attributes_product
+                    references: products(id)
+              - column:
+                  name: attribute_key
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: attribute_value
+                  type: VARCHAR(255)
+      rollback:
+        - dropTable:
+            tableName: product_attributes
+
+  - changeSet:
+      id: 003-create-product-options-table
+      author: estore
+      comment: "Creates the product_options table"
+      changes:
+        - createTable:
+            tableName: product_options
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_product_options
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: position
+                  type: INT
+              - column:
+                  name: product_id
+                  type: UUID
+                  constraints:
+                    foreignKeyName: fk_product_options_product
+                    references: products(id)
+      rollback:
+        - dropTable:
+            tableName: product_options
+
+  - changeSet:
+      id: 004-create-product-option-values-table
+      author: estore
+      comment: "Creates the product_option_values element-collection table"
+      changes:
+        - createTable:
+            tableName: product_option_values
+            columns:
+              - column:
+                  name: option_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_product_option_values_option
+                    references: product_options(id)
+              - column:
+                  name: value
+                  type: VARCHAR(255)
+      rollback:
+        - dropTable:
+            tableName: product_option_values
+
+  - changeSet:
+      id: 005-create-product-variants-table
+      author: estore
+      comment: "Creates the product_variants table"
+      changes:
+        - createTable:
+            tableName: product_variants
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_product_variants
+                    nullable: false
+              - column:
+                  name: stock_keeping_unit
+                  type: VARCHAR(255)
+              - column:
+                  name: price_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: price_currency
+                  type: VARCHAR(3)
+              - column:
+                  name: availability
+                  type: VARCHAR(50)
+              - column:
+                  name: product_id
+                  type: UUID
+                  constraints:
+                    foreignKeyName: fk_product_variants_product
+                    references: products(id)
+      rollback:
+        - dropTable:
+            tableName: product_variants
+
+  - changeSet:
+      id: 006-create-product-variant-option-values-table
+      author: estore
+      comment: "Creates the product_variant_option_values element-collection table"
+      changes:
+        - createTable:
+            tableName: product_variant_option_values
+            columns:
+              - column:
+                  name: variant_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_variant_option_values_variant
+                    references: product_variants(id)
+              - column:
+                  name: option_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: option_value
+                  type: VARCHAR(255)
+      rollback:
+        - dropTable:
+            tableName: product_variant_option_values
+
+  - changeSet:
+      id: 007-create-add-ons-table
+      author: estore
+      comment: "Creates the add_ons table"
+      changes:
+        - createTable:
+            tableName: add_ons
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_add_ons
+                    nullable: false
+              - column:
+                  name: product_ref_id
+                  type: UUID
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: price_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: price_currency
+                  type: VARCHAR(3)
+              - column:
+                  name: product_id
+                  type: UUID
+                  constraints:
+                    foreignKeyName: fk_add_ons_product
+                    references: products(id)
+      rollback:
+        - dropTable:
+            tableName: add_ons
