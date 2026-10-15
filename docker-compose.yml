@@ -1,0 +1,69 @@
+services:
+  product-service-db:
+    image: postgres:17
+    container_name: product-service-db
+    environment:
+      POSTGRES_DB: product_service
+      POSTGRES_USER: product_service
+      POSTGRES_PASSWORD: product_service
+    ports:
+      - "5432:5432"
+    volumes:
+      - product-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U product_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  product-service:
+    build:
+      context: ./product-service
+    container_name: product-service-app
+    depends_on:
+      product-service-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://product-service-db:5432/product_service
+      SPRING_DATASOURCE_USERNAME: product_service
+      SPRING_DATASOURCE_PASSWORD: product_service
+    ports:
+      - "8080:8080"
+
+  cart-service-db:
+    image: postgres:17
+    container_name: cart-service-db
+    environment:
+      POSTGRES_DB: cart_service
+      POSTGRES_USER: cart_service
+      POSTGRES_PASSWORD: cart_service
+    ports:
+      - "5433:5432"
+    volumes:
+      - cart-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cart_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  cart-service:
+    build:
+      context: ./cart-service
+    container_name: cart-service-app
+    depends_on:
+      cart-service-db:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://cart-service-db:5432/cart_service
+      SPRING_DATASOURCE_USERNAME: cart_service
+      SPRING_DATASOURCE_PASSWORD: cart_service
+      PRODUCT_SERVICE_URL: http://product-service:8080
+    ports:
+      - "8081:8081"
+
+volumes:
+  product-postgres-data:
+  cart-postgres-data:
