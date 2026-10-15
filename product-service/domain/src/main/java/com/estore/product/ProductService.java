@@ -11,6 +11,7 @@ public class ProductService {
 
     public Product addProduct(AddProductCommand command) {
         Product product = Product.from(command);
+        validateAddOns(product.getId(), product.getAddOns());
         return productRepositoryPort.save(product);
     }
 
@@ -28,9 +29,12 @@ public class ProductService {
         return getProductById(id).getOptions();
     }
 
-    public Product updateProduct(UUID id, UpdateProductRequest request) {
+    public Product updateProduct(UUID id, UpdateProductCommand command) {
         Product product = getProductById(id);
-        product.update(request);
+        if (command.getAddOns() != null) {
+            validateAddOns(id, command.getAddOns());
+        }
+        product.update(command);
         return productRepositoryPort.save(product);
     }
 
@@ -39,5 +43,20 @@ public class ProductService {
             throw new ProductNotFoundException(id);
         }
         productRepositoryPort.deleteById(id);
+    }
+
+    private void validateAddOns(UUID productId, List<AddOn> addOns) {
+        for (AddOn addOn : addOns) {
+            UUID addOnProductId = addOn.getProductId();
+            if (addOnProductId == null) {
+                throw InvalidAddOnException.missingProductId();
+            }
+            if (addOnProductId.equals(productId)) {
+                throw InvalidAddOnException.selfReference(productId);
+            }
+            if (!productRepositoryPort.existsById(addOnProductId)) {
+                throw InvalidAddOnException.productNotFound(addOnProductId);
+            }
+        }
     }
 }

@@ -33,32 +33,50 @@ public class Product {
     private List<AddOn> addOns = new ArrayList<>();
 
     public static Product from(AddProductCommand command) {
-        List<ProductVariant> variants = command.getVariants();
-        variants.forEach(variant -> {
-            if (variant.getId() == null) {
-                variant.setId(UUID.randomUUID());
-            }
-        });
+        List<ProductVariant> variants = command.getVariants() != null ? command.getVariants() : new ArrayList<>();
+        assignMissingVariantIds(variants);
         return Product.builder()
                 .id(UUID.randomUUID())
                 .name(command.getName())
                 .type(command.getType())
                 .description(command.getDescription())
                 .basePrice(command.getBasePrice())
-                .attributes(command.getAttributes())
-                .options(command.getOptions())
+                .attributes(command.getAttributes() != null ? command.getAttributes() : new HashMap<>())
+                .options(command.getOptions() != null ? command.getOptions() : new ArrayList<>())
                 .variants(variants)
-                .addOns(command.getAddOns())
+                .addOns(command.getAddOns() != null ? command.getAddOns() : new ArrayList<>())
                 .build();
     }
 
-    public void update(UpdateProductRequest request) {
-        this.name = request.getName();
-        this.type = request.getType();
-        this.description = request.getDescription();
-        this.basePrice = request.getBasePrice();
-        if (request.getAttributes() != null) {
-            this.attributes = request.getAttributes();
+    public void update(UpdateProductCommand command) {
+        this.name = command.getName();
+        this.type = command.getType();
+        this.description = command.getDescription();
+        this.basePrice = command.getBasePrice();
+        if (command.getAttributes() != null) {
+            this.attributes = command.getAttributes();
         }
+        if (command.getOptions() != null) {
+            this.options = new ArrayList<>(command.getOptions());
+        }
+        if (command.getVariants() != null) {
+            assignMissingVariantIds(command.getVariants());
+            this.variants = new ArrayList<>(command.getVariants());
+        }
+        if (command.getAddOns() != null) {
+            this.addOns = new ArrayList<>(command.getAddOns());
+        }
+    }
+
+    /**
+     * Variants sent without an id are new; variants sent with their existing id keep it,
+     * so references held by carts and orders (variantId) stay valid after an update.
+     */
+    private static void assignMissingVariantIds(List<ProductVariant> variants) {
+        variants.forEach(variant -> {
+            if (variant.getId() == null) {
+                variant.setId(UUID.randomUUID());
+            }
+        });
     }
 }

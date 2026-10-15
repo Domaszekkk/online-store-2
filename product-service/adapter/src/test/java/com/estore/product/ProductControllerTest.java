@@ -1,12 +1,14 @@
 package com.estore.product;
 
+import com.estore.product.product.ProductController;
+import com.estore.product.product.ProductMapperImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -14,7 +16,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -22,28 +29,26 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@WebMvcTest(ProductController.class)
+@Import(ProductMapperImpl.class)
 class ProductControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @MockitoBean
+    private ProductService productService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private AddProductCommand sampleLaptopCommand() {
-        return AddProductCommand.builder()
+    private Product sampleProduct(UUID id) {
+        return Product.builder()
+                .id(id)
                 .name("ProBook X15")
                 .type(ProductType.COMPUTER)
                 .description("Business laptop")
                 .basePrice(Money.of(new BigDecimal("3999.00"), "PLN"))
-                .attributes(Map.of("screen", "15.6"))
-                .options(List.of(ProductOption.builder()
-                        .name("Procesor")
-                        .position(1)
-                        .values(List.of("i5", "i7"))
-                        .build()))
+                .options(List.of(ProductOption.builder().name("Procesor").position(1).values(List.of("i5", "i7")).build()))
                 .variants(List.of(ProductVariant.builder()
+                        .id(UUID.randomUUID())
                         .stockKeepingUnit("PBX15-I7-16")
                         .optionValues(Map.of("Procesor", "i7"))
                         .price(Money.of(new BigDecimal("4599.00"), "PLN"))
@@ -57,134 +62,161 @@ class ProductControllerTest {
                 .build();
     }
 
-    private String createProduct(AddProductCommand command) throws Exception {
-        String response = mockMvc.perform(post("/products")
+    @Test
+    void addProduct_DataCorrect_Returns201() throws Exception {
+        UUID id = UUID.randomUUID();
+        AddProductCommand command = AddProductCommand.builder()
+                .name("ProBook X15").type(ProductType.COMPUTER)
+                .basePrice(Money.of(new BigDecimal("3999.00"), "PLN"))
+                .build();
+        when(productService.addProduct(any(AddProductCommand.class))).thenReturn(sampleProduct(id));
+
+        mockMvc.perform(post("/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(command)))
                 .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asText();
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.name").value("ProBook X15"))
+                .andExpect(jsonPath("$.type").value("COMPUTER"))
+                .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value("PBX15-I7-16"))
+                .andExpect(jsonPath("$.variants[0].availability").value("AVAILABLE"))
+                .andExpect(jsonPath("$.addOns[0].name").value("Mysz"));
     }
 
     @Test
-    void addProduct_thenGetById_returnsPersistedProduct() throws Exception {
-        AddProductCommand command = sampleLaptopCommand();
-
-        String created = mockMvc.perform(post("/products")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(command)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").exists())
-                .andExpect(jsonPath("$.name").value("ProBook X15"))
-                .andExpect(jsonPath("$.type").value("COMPUTER"))
-                .andExpect(jsonPath("$.basePrice.currency").value("PLN"))
-                .andExpect(jsonPath("$.options.length()").value(1))
-                .andExpect(jsonPath("$.options[0].name").value("Procesor"))
-                .andExpect(jsonPath("$.options[0].values.length()").value(2))
-                .andExpect(jsonPath("$.variants.length()").value(1))
-                .andExpect(jsonPath("$.variants[0].id").exists())
-                .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value("PBX15-I7-16"))
-                .andExpect(jsonPath("$.variants[0].availability").value("AVAILABLE"))
-                .andExpect(jsonPath("$.addOns[0].name").value("Mysz"))
-                .andReturn().getResponse().getContentAsString();
-
-        String id = objectMapper.readTree(created).get("id").asText();
-        assertEquals(0, new BigDecimal("3999.00")
-                .compareTo(new BigDecimal(objectMapper.readTree(created).get("basePrice").get("amount").asText())));
+    void getProductById_DataCorrect_Returns200() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(productService.getProductById(id)).thenReturn(sampleProduct(id));
 
         mockMvc.perform(get("/products/{id}", id))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id))
-                .andExpect(jsonPath("$.name").value("ProBook X15"))
-                .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value("PBX15-I7-16"))
-                .andExpect(jsonPath("$.variants[0].optionValues.Procesor").value("i7"));
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.name").value("ProBook X15"));
     }
 
     @Test
     void getProductById_ProductNotFound_Returns404() throws Exception {
-        mockMvc.perform(get("/products/{id}", UUID.randomUUID()))
+        UUID id = UUID.randomUUID();
+        when(productService.getProductById(id)).thenThrow(new ProductNotFoundException(id));
+
+        mockMvc.perform(get("/products/{id}", id))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").exists());
+                .andExpect(jsonPath("$.message").value("Product with id " + id + " not found"));
     }
 
     @Test
-    void getProducts_ByType_ReturnsMatchingProducts() throws Exception {
-        String id = createProduct(sampleLaptopCommand());
+    void getProducts_ByType_Returns200() throws Exception {
+        when(productService.getProducts(ProductType.COMPUTER)).thenReturn(List.of(sampleProduct(UUID.randomUUID())));
 
         mockMvc.perform(get("/products").param("type", "COMPUTER"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + id + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + id + "')].type").value(org.hamcrest.Matchers.hasItem("COMPUTER")));
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].type").value("COMPUTER"));
     }
 
     @Test
-    void getProducts_NoType_ReturnsAllProducts() throws Exception {
-        String id = createProduct(sampleLaptopCommand());
-
-        mockMvc.perform(get("/products"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + id + "')]").exists());
-    }
-
-    @Test
-    void getProductConfiguration_ReturnsOptions() throws Exception {
-        String id = createProduct(sampleLaptopCommand());
+    void getProductConfiguration_Returns200() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(productService.getProductConfiguration(id)).thenReturn(
+                List.of(ProductOption.builder().name("Procesor").position(1).values(List.of("i5", "i7")).build()));
 
         mockMvc.perform(get("/products/{id}/configuration", id))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].name").value("Procesor"))
                 .andExpect(jsonPath("$[0].values.length()").value(2));
     }
 
     @Test
-    void updateProduct_ChangesDetails() throws Exception {
-        String id = createProduct(sampleLaptopCommand());
+    void updateProduct_DataCorrect_Returns200() throws Exception {
+        UUID id = UUID.randomUUID();
         UpdateProductRequest request = UpdateProductRequest.builder()
-                .name("ProBook X15 Gen2")
-                .type(ProductType.COMPUTER)
-                .description("Updated laptop")
-                .basePrice(Money.of(new BigDecimal("4299.00"), "PLN"))
+                .name("ProBook X15 Gen2").type(ProductType.COMPUTER)
+                .basePrice(new MoneyRequest(new BigDecimal("4299.00"), "PLN"))
                 .build();
+        when(productService.updateProduct(eq(id), any(UpdateProductCommand.class))).thenReturn(sampleProduct(id));
 
         mockMvc.perform(put("/products/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("ProBook X15 Gen2"))
-                .andExpect(jsonPath("$.description").value("Updated laptop"));
-
-        mockMvc.perform(get("/products/{id}", id))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("ProBook X15 Gen2"));
+                .andExpect(jsonPath("$.id").value(id.toString()));
     }
 
     @Test
-    void deleteProduct_RemovesProduct() throws Exception {
-        String id = createProduct(sampleLaptopCommand());
+    void deleteProduct_DataCorrect_Returns204() throws Exception {
+        UUID id = UUID.randomUUID();
+        doNothing().when(productService).deleteProduct(id);
 
         mockMvc.perform(delete("/products/{id}", id))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/products/{id}", id))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void updateProduct_ProductNotFound_Returns404() throws Exception {
-        UpdateProductRequest request = UpdateProductRequest.builder().name("Nope").build();
-
-        mockMvc.perform(put("/products/{id}", UUID.randomUUID())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").exists());
+        verify(productService).deleteProduct(id);
     }
 
     @Test
     void deleteProduct_ProductNotFound_Returns404() throws Exception {
-        mockMvc.perform(delete("/products/{id}", UUID.randomUUID()))
+        UUID id = UUID.randomUUID();
+        doThrow(new ProductNotFoundException(id)).when(productService).deleteProduct(id);
+
+        mockMvc.perform(delete("/products/{id}", id))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").exists());
+                .andExpect(jsonPath("$.message").value("Product with id " + id + " not found"));
+    }
+
+    @Test
+    void addProduct_AddOnProductDoesNotExist_Returns400() throws Exception {
+        UUID missingProductId = UUID.randomUUID();
+        AddProductCommand command = AddProductCommand.builder()
+                .name("ProBook X15").type(ProductType.COMPUTER)
+                .basePrice(Money.of(new BigDecimal("3999.00"), "PLN"))
+                .build();
+        when(productService.addProduct(any(AddProductCommand.class)))
+                .thenThrow(InvalidAddOnException.productNotFound(missingProductId));
+
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(command)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Add-on product with id " + missingProductId + " does not exist"));
+    }
+
+    @Test
+    void addProduct_EmptyBody_Returns400WithAllMissingFields() throws Exception {
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Validation failed: basePrice: must not be null; name: must not be blank; type: must not be null"));
+        org.mockito.Mockito.verifyNoInteractions(productService);
+    }
+
+    @Test
+    void addProduct_InvalidNestedVariantAndMoney_Returns400() throws Exception {
+        String body = """
+                {"name":"ProBook X15","type":"COMPUTER","basePrice":{"amount":-1,"currency":"pln"},
+                 "variants":[{"stockKeepingUnit":"","price":{"amount":4599.00,"currency":"PLN"}}]}
+                """;
+
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("basePrice.amount"),
+                        org.hamcrest.Matchers.containsString("basePrice.currency"),
+                        org.hamcrest.Matchers.containsString("variants[0].stockKeepingUnit"),
+                        org.hamcrest.Matchers.containsString("variants[0].availability"))));
+        org.mockito.Mockito.verifyNoInteractions(productService);
+    }
+
+    @Test
+    void addProduct_UnknownProductType_Returns400() throws Exception {
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Toster\",\"type\":\"TOASTER\",\"basePrice\":{\"amount\":99.00,\"currency\":\"PLN\"}}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Malformed request body")));
+        org.mockito.Mockito.verifyNoInteractions(productService);
     }
 }

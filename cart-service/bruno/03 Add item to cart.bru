@@ -1,0 +1,40 @@
+meta {
+  name: 03 Add item to cart
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/carts/{{cartId}}/items
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{variantId}}",
+    "quantity": 2,
+    "addOns": [
+      { "productId": "{{addOnProductId}}", "quantity": 1 }
+    ]
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200 && res.getBody().items.length > 0) {
+    bru.setEnvVar("itemId", res.getBody().items[0].id);
+  }
+}
+
+docs {
+  Przyklad: 2 laptopy + 1 kabel. Add-on ma wlasna ilosc, niezalezna od ilosci pozycji:
+  lineTotal = unitPrice * quantity + suma(cena add-onu * ilosc add-onu).
+  Ponowne dodanie tej samej konfiguracji (wariant + ten sam zestaw add-onow) sumuje ilosci
+  pozycji i add-onow zamiast tworzyc nowa pozycje. "addOns" jest opcjonalne.
+  Bledne dane (brak productId/variantId, quantity < 1) -> 400 z lista pol.
+}

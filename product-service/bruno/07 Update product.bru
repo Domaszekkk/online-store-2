@@ -1,0 +1,24 @@
+meta {
+  name: 07 Update product
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/products/{{productId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "ProBook X15 Gen2",
+    "type": "COMPUTER",
+    "description": "Odswiezony model",
+    "basePrice": { "amount": 4299.00, "currency": "PLN" }
+  }
+}

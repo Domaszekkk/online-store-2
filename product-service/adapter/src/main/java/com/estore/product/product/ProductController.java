@@ -1,6 +1,6 @@
 package com.estore.product.product;
 
-import com.estore.product.AddProductCommand;
+import com.estore.product.AddProductRequest;
 import com.estore.product.ProductDto;
 import com.estore.product.ProductOptionDto;
 import com.estore.product.ProductService;
@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -58,24 +59,26 @@ public class ProductController {
 
     @Operation(summary = "Create a new product", description = "Creates a new product with its options, variants and add-ons")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Product created successfully")
+            @ApiResponse(responseCode = "201", description = "Product created successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request or add-on referencing a non-existent product")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ProductDto addProduct(@RequestBody AddProductCommand command) {
-        return productMapper.toDto(productService.addProduct(command));
+    public ProductDto addProduct(@Valid @RequestBody AddProductRequest request) {
+        return productMapper.toDto(productService.addProduct(productMapper.toCommand(request)));
     }
 
     @Operation(summary = "Update product", description = "Updates the details of an existing product")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Product updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request or add-on referencing a non-existent product"),
             @ApiResponse(responseCode = "404", description = "Product not found")
     })
     @PutMapping("/{id}")
     public ProductDto updateProduct(
             @Parameter(description = "Id of the product to update") @PathVariable UUID id,
-            @RequestBody UpdateProductRequest request) {
-        return productMapper.toDto(productService.updateProduct(id, request));
+            @Valid @RequestBody UpdateProductRequest request) {
+        return productMapper.toDto(productService.updateProduct(id, productMapper.toCommand(request)));
     }
 
     @Operation(summary = "Delete product", description = "Deletes a product by id")
