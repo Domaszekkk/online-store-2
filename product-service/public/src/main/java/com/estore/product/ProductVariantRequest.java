@@ -14,7 +14,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 public class ProductVariantRequest {
-    /** Optional: send the existing id on update to keep it (carts and orders reference it). */
     private UUID id;
 
     @NotBlank

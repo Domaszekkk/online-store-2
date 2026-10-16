@@ -28,14 +28,18 @@ Endpointy: `POST /products`, `GET /products`, `GET /products?type=`, `GET /produ
 Testy: domena 16/16, kontroler (web-slice) 12/12, integracja (Testcontainers) 9/9.
 
 **✅ Task 2 — cart-service — GOTOWY** (port `8081`, baza `5433`).
-Endpointy: `POST /carts`, `GET /carts/{id}`, `POST /carts/{id}/items` (Feign → product-service: snapshot ceny/SKU/nazwy, sprawdzanie dostępności; ta sama konfiguracja = zwiększenie ilości), `PATCH /carts/{id}/items/{itemId}` (zmiana ilości), `DELETE /carts/{id}/items/{itemId}`.
-Testy: domena 19/19, kontroler 12/12, integracja 6/6, retry Feign (stub HTTP z JDK) 3/3.
+Endpointy: `POST /carts`, `GET /carts/{id}`, `POST /carts/{id}/items` (Feign → product-service: snapshot ceny/SKU/nazwy, sprawdzanie dostępności; ta sama konfiguracja = zwiększenie ilości), `PATCH /carts/{id}/items/{itemId}` (zmiana ilości), `DELETE /carts/{id}/items/{itemId}`, `POST /carts/{id}/checkout` (Task 3: zamyka koszyk → `CHECKED_OUT`, zwraca zawartość; pusty/już zamknięty → 409).
+Testy: domena 22/22, kontroler 14/14, integracja 7/7, retry Feign (stub HTTP z JDK) 3/3.
 
-**Oba serwisy działają razem** przez `docker compose up --build` (zweryfikowane end-to-end 2026-10-15: produkt → koszyk → dodanie ×2 (scalenie) → PATCH → DELETE; 2 laptopy + 1 kabel = 9237.00; błędne body → 400 z listą pól; awaria product-service → 503 po 3 próbach). Kolekcje Bruno: `product-service/bruno` (01 akcesorium → 02 laptop z add-onem → … 08) i `cart-service/bruno` (01–05).
+**✅ Task 3 — order-service — GOTOWY** (port `8082`, baza `5434`, gałąź `feature/ESS-003`).
+Endpointy: `POST /orders` (Feign → `POST /carts/{id}/checkout`, snapshot pozycji z add-onami, koszt dostawy, numer `ORD-<rok>-<nr>`), `GET /orders/{id}`, `GET /orders?email=` (historia klienta, od najnowszych; bez `email` → wszystkie).
+Testy: domena 9/9, kontroler 11/11, integracja 7/7, adapter Feign (stub HTTP) 4/4, `SafeRetryer` 3/3.
+
+**Trzy serwisy działają razem** przez `docker compose up --build` (zweryfikowane end-to-end 2026-10-16: produkt → koszyk (2 laptopy + 1 kabel = 9237.00) → zamówienie kurierem = 9256.99 `ORD-2026-000001`, koszyk `CHECKED_OUT`; drugie zamówienie z tego koszyka → 409; pusty koszyk → 409; nieznany koszyk → 404; błędne body → 400; odbiór osobisty + adres do faktury; bez adresu do faktury → `billingAddress: null`; historia po emailu wielkimi literami → 2 zamówienia od najnowszego; cart-service wyłączony → 503). Kolekcje Bruno: `product-service/bruno` (01 akcesorium → 02 laptop z add-onem → … 08), `cart-service/bruno` (01–06) i `order-service/bruno` (01–04).
 
 **✅ Poprawki po review (2026-10-15)** — patrz sekcja 4.
 
-**⏳ Task 3–6 — do zrobienia.**
+**⏳ Task 4–6 — do zrobienia.**
 
 Git: zarządza użytkownik ręcznie (nic nie commitowane automatycznie).
 
@@ -45,8 +49,8 @@ Git: zarządza użytkownik ręcznie (nic nie commitowane automatycznie).
 
 ```
 online-store-2/
-├─ docker-compose.yml            # product-service(+ -db) + cart-service(+ -db); cart czeka na healthy product
-├─ MODEL-DANYCH.md               # specyfikacja modelu danych — UWAGA: pliku NIE MA w repo (stan 2026-10-15), do odtworzenia
+├─ docker-compose.yml            # product, cart, order (+ bazy); cart czeka na healthy product, order na healthy cart
+├─ MODEL-DANYCH.md               # specyfikacja modelu danych (odtworzona z kodu 2026-10-16)
 ├─ handoff.md                    # ten plik
 ├─ product-service/              # Task 1 (artifactId: product-service; moduły: product-model/-domain/-public/-adapter)
 │  ├─ pom.xml, Dockerfile, .mvn/ (wrapper 3.9.15), bruno/
@@ -61,25 +65,42 @@ online-store-2/
 │  └─ adapter/ ProductController, *Entity, ProductJpaRepository, ProductRepositoryAdapter,
 │              ProductMapper (MapStruct), ProductServiceConfig, GlobalExceptionHandler, OpenApiConfig,
 │              resources/application.properties, db/changelog/** (Liquibase)
-└─ cart-service/                 # Task 2 (artifactId: cart-service; moduły: cart-model/-domain/-public/-adapter)
+├─ cart-service/                 # Task 2 (artifactId: cart-service; moduły: cart-model/-domain/-public/-adapter)
+│  ├─ pom.xml, Dockerfile, .mvn/ (wrapper 3.9.15), bruno/ (01–06)
+│  ├─ model/   .../com/estore/cart/   Cart (+checkout()), CartItem, CartItemAddOn (+quantity), Money (+add/multiply),
+│  │                                  CartStatus, AddItemCommand, AddOnSelection, ChangeItemQuantityCommand,
+│  │                                  ProductDetails, VariantDetails, AddOnDetails,
+│  │                                  CartException, CartNotFoundException, ProductNotFoundException,
+│  │                                  VariantNotFoundException, VariantNotAvailableException,
+│  │                                  CartNotActiveException, CartItemNotFoundException, EmptyCartException,
+│  │                                  InvalidQuantityException, ProductCatalogUnavailableException
+│  ├─ domain/  CartService, CartRepositoryPort, ProductCatalogPort
+│  ├─ public/  odpowiedzi: CartDto, CartItemDto, CartItemAddOnDto (+quantity), MoneyDto, ErrorMessage
+│  │           żądania (Bean Validation): AddItemRequest, AddOnSelectionRequest, ChangeItemQuantityRequest
+│  └─ adapter/ CartController, *Entity, CartJpaRepository, CartRepositoryAdapter, CartMapper,
+│              CartServiceConfig, GlobalExceptionHandler, OpenApiConfig,
+│              client/ ProductClient (@FeignClient), ProductResponse/VariantResponse/AddOnResponse/MoneyPayload (records),
+│                      ProductCatalogAdapter (implements ProductCatalogPort),
+│                      ProductClientConfiguration (Retryer + ErrorDecoder, tylko dla ProductClient),
+│                      RetryOnServerErrorDecoder (5xx → RetryableException)
+│              resources/application.properties (product.service.url, timeouty Feign, product.service.retry.*), db/changelog/**
+└─ order-service/                # Task 3 (artifactId: order-service; moduły: order-model/-domain/-public/-adapter)
    ├─ pom.xml, Dockerfile, .mvn/ (wrapper 3.9.15), bruno/
-   ├─ model/   .../com/estore/cart/   Cart, CartItem, CartItemAddOn (+quantity), Money (+add/multiply),
-   │                                  CartStatus, AddItemCommand, AddOnSelection, ChangeItemQuantityCommand,
-   │                                  ProductDetails, VariantDetails, AddOnDetails,
-   │                                  CartException, CartNotFoundException, ProductNotFoundException,
-   │                                  VariantNotFoundException, VariantNotAvailableException,
-   │                                  CartNotActiveException, CartItemNotFoundException,
-   │                                  InvalidQuantityException, ProductCatalogUnavailableException
-   ├─ domain/  CartService, CartRepositoryPort, ProductCatalogPort
-   ├─ public/  odpowiedzi: CartDto, CartItemDto, CartItemAddOnDto (+quantity), MoneyDto, ErrorMessage
-   │           żądania (Bean Validation): AddItemRequest, AddOnSelectionRequest, ChangeItemQuantityRequest
-   └─ adapter/ CartController, *Entity, CartJpaRepository, CartRepositoryAdapter, CartMapper,
-               CartServiceConfig, GlobalExceptionHandler, OpenApiConfig,
-               client/ ProductClient (@FeignClient), ProductResponse/VariantResponse/AddOnResponse/MoneyPayload (records),
-                       ProductCatalogAdapter (implements ProductCatalogPort),
-                       ProductClientConfiguration (Retryer + ErrorDecoder, tylko dla ProductClient),
-                       RetryOnServerErrorDecoder (5xx → RetryableException)
-               resources/application.properties (product.service.url, timeouty Feign, product.service.retry.*), db/changelog/**
+   ├─ model/   .../com/estore/order/  Order (place(), CURRENCY), OrderLine (fromCartItem), OrderLineAddOn, Customer, Address,
+   │                                  Money, OrderStatus, PaymentMethod, DeliveryMethod (koszt dostawy), PlaceOrderCommand,
+   │                                  CartDetails, CartItemDetails, CartItemAddOnDetails,
+   │                                  OrderException, OrderNotFoundException, CartNotFoundException,
+   │                                  CartNotOrderableException, CartServiceUnavailableException
+   ├─ domain/  OrderService, OrderRepositoryPort (+ nextOrderSequenceNumber), CartCheckoutPort
+   ├─ public/  (zależy od order-model — enumy w żądaniach)
+   │           odpowiedzi: OrderDto, OrderLineDto, OrderLineAddOnDto, CustomerDto, AddressDto, MoneyDto, ErrorMessage
+   │           żądania (Bean Validation): PlaceOrderRequest, CustomerRequest, AddressRequest
+   └─ adapter/ order/  OrderController, OrderEntity/OrderLineEntity/OrderLineAddOnEntity, Customer-/Address-/MoneyEmbeddable,
+               │       OrderJpaRepository (nextval('order_number_seq')), OrderRepositoryAdapter, OrderMapper, OrderServiceConfig
+               client/ CartClient (@FeignClient, POST /carts/{id}/checkout), CartResponse/CartItemResponse/
+                       CartItemAddOnResponse/MoneyPayload/ErrorResponse (records), CartCheckoutAdapter,
+                       CartClientConfiguration, SafeRetryer
+               resources/application.properties (cart.service.url, timeouty, cart.service.retry.*), db/changelog/**
 ```
 
 Kluczowe stałe wersje (w pomach): Spring Boot **4.1.1**, springdoc **3.1.1**, MapStruct **1.6.3**, lombok-mapstruct-binding **0.2.0**, Testcontainers BOM **2.0.5**, Spring Cloud **2025.1.3** (OpenFeign 5.x), Postgres **17**, Maven wrapper **3.9.15**.
@@ -90,9 +111,10 @@ Kluczowe stałe wersje (w pomach): Spring Boot **4.1.1**, springdoc **3.1.1**, M
 
 - **product-service**: pełny heksagon, generyczny model produktu (options = wymiary wyboru, variants = konkretne kombinacje z ceną/SKU/stanem, addOns = akcesoria), `Availability` enum (AVAILABLE / SOLD_OUT / COMING_SOON) z metodą `isAvailable()` — **brak `stock`** (stan magazynowy to osobna domena). Tabele relacyjne + Liquibase. 6 endpointów + Swagger. Utwardzony `Product.from` (null-safe kolekcje).
 - **cart-service**: pełny heksagon, koszyk z pozycjami, snapshot cen, liczenie `lineTotal`/`total` (Money z `add`/`multiply`). **Feign** `ProductClient` → product-service; `ProductCatalogPort` (port) + `ProductCatalogAdapter` (adapter) mapują odpowiedź na model domeny. Walidacja: wariant nieznaleziony (404), niedostępny (409). DTO odpowiedzi Feign jako **rekordy** (ProductResponse itd.).
-- **Nazewnictwo modułów**: unikalne `artifactId` per serwis (`product-model`/`product-adapter`, `cart-model`/`cart-adapter`) — patrz sekcja 5.
-- **docker-compose.yml**: 2 serwisy + 2 bazy, `cart-service` ma `PRODUCT_SERVICE_URL=http://product-service:8080` i `depends_on product-service`.
-- **Bruno**: kolekcje `product-service/bruno` (01–08) i `cart-service/bruno` (01–05).
+- **Nazewnictwo modułów**: unikalne `artifactId` per serwis (`product-model`/`product-adapter`, `cart-model`/`cart-adapter`, `order-model`/`order-adapter`) — patrz sekcja 5.
+- **docker-compose.yml**: 3 serwisy + 3 bazy (`product-service-db` 5432, `cart-service-db` 5433, `order-service-db` 5434). `cart-service` ma `PRODUCT_SERVICE_URL=http://product-service:8080` i `depends_on product-service: service_healthy`; `order-service` ma `CART_SERVICE_URL` i `depends_on cart-service: service_healthy`.
+- **Bruno**: kolekcje `product-service/bruno` (01–08), `cart-service/bruno` (01–06) i `order-service/bruno` (01–04).
+- **Kod bez komentarzy**: Javadoc i komentarze `//` usunięte z klas (reguła użytkownika — nie dodawać ich w nowym kodzie, także w testach).
 
 ### Poprawki po review (2026-10-15)
 - **cart — reguły koszyka (w modelu `Cart`/`CartItem`)**: modyfikacja tylko gdy `status == ACTIVE` (inaczej 409 `CartNotActiveException`); ta sama konfiguracja (wariant + zbiór add-onów) → suma ilości pozycji **i** add-onów zamiast nowej pozycji; walidacja ilości (`InvalidQuantityException`, 400) w `CartItem`.
@@ -108,6 +130,14 @@ Kluczowe stałe wersje (w pomach): Spring Boot **4.1.1**, springdoc **3.1.1**, M
 - **Docker**: `RUN --mount=type=cache,target=/root/.m2` (cache zależności między buildami), `HEALTHCHECK` przez `curl /actuator/health`; w compose baza produktu przemianowana `postgres-db` → `product-service-db` (wolumen bez zmian), cart `depends_on product-service: service_healthy`.
 - **Actuator**: cart eksponuje też `metrics` (spójnie z product).
 - **Waluta**: świadomie zostaje sztywne `PLN` (decyzja użytkownika).
+
+### Task 3 — order-service (2026-10-16)
+- **Decyzje użytkownika („wg rekomendacji”)**: historia po emailu (`GET /orders?email=`, brak kont); pełny enum statusów, używany tylko `NEW`, bez endpointu zmiany statusu; koszyk zamykany przez `POST /carts/{id}/checkout`; koszt dostawy stały w kodzie (kurier 19,99 / paczkomat 12,99 / odbiór 0), bez darmowej dostawy od progu; numer `ORD-<rok>-<6 cyfr>` z sekwencji Postgresa obok UUID; `billingAddress` opcjonalny — **zmiana 2026-10-16 (decyzja użytkownika): brak adresu = brak faktury**, adres dostawy nie jest kopiowany, pole zostaje `null`; `MODEL-DANYCH.md` odtworzony z kodu.
+- **Zmiany względem planu z handoff**: `OrderLine` ma add-ony z ilością i `stockKeepingUnit`; pole nazwane `productName` (jak w koszyku) zamiast `nameSnapshot`; zamówienie zapamiętuje `cartId`.
+- **Przepływ `POST /orders`**: walidacja żądania → `CartCheckoutPort.checkout(cartId)` (jedno wywołanie: zamyka koszyk i zwraca jego zawartość, więc nie ma okna, w którym koszyk zmieni się między odczytem a zamknięciem) → `Order.place(...)` (snapshot, sumy) → numer z sekwencji → zapis.
+- **Błędy z cart-service**: 404 → `CartNotFoundException` 404; 409 → `CartNotOrderableException` 409 z przekazanym powodem z cart-service (np. „is empty”, „is CHECKED_OUT”); inne/awaria → `CartServiceUnavailableException` 503.
+- **cart-service**: `Cart.checkout()` (tylko `ACTIVE`, niepusty), `EmptyCartException` 409, `CartService.checkout`, endpoint `POST /carts/{id}/checkout`, Bruno `06 Checkout cart`.
+- **compose**: `order-service-db` (5434, wolumen `order-postgres-data`) + `order-service` (8082, `CART_SERVICE_URL`, czeka na healthy cart-service).
 
 ---
 
@@ -131,6 +161,9 @@ Boot 4 mocno zmodularyzował i przeszedł na Jackson 3 — to kosztowało serię
 14. **Kolejność w Bruno/testach**: add-on musi wskazywać istniejący produkt → najpierw tworzyć akcesorium, potem produkt główny (kolekcja product: 01 ELECTRONICS → 02 COMPUTER).
 15. **`@Builder.Default` a konstruktor bezargumentowy (zaobserwowane 2026-10-15)**: MapStruct (setter mapping) tworzy obiekt przez `@NoArgsConstructor`, a ten **inicjalizuje** pola `@Builder.Default` (pusta mapa/lista), a MapStruct nie nadpisuje ich, gdy źródło jest `null`. W komendach typu *update*, gdzie `null` znaczy „bez zmian”, **nie dawać `@Builder.Default`** — inaczej pominięte pole czyści dane.
 16. **Bean Validation w heksagonie**: adnotacje `jakarta.validation` tylko na klasach żądań w `public`, nie na komendach w `model`. Nazwy klas żądań nie mogą kolidować z klasami `model` (ten sam pakiet `com.estore.<service>` w obu modułach).
+17. **Nie ponawiać nieidempotentnych POST-ów Feignem**: `checkout` zmienia stan koszyka — ponowienie po timeoucie/5xx trafiłoby w już zamknięty koszyk i zwróciło fałszywe 409. Stąd w order-service `SafeRetryer` (ponawia tylko GET albo odmowę połączenia, gdy żądanie nie dotarło do serwera) i **brak** `RetryOnServerErrorDecoder`.
+18. **Znane ograniczenie (świadome)**: checkout koszyka i zapis zamówienia to dwie osobne transakcje w dwóch bazach. Gdy zapis zamówienia się nie uda po udanym checkoucie, koszyk zostaje `CHECKED_OUT` bez zamówienia. Pełne rozwiązanie (saga/kompensacja, outbox) poza zakresem; ewentualnie wrócić przy Task 4 (Kafka).
+19. **Jackson 3 w kodzie produkcyjnym**: do ręcznego parsowania (np. treść błędu z Feign) wstrzykiwać `tools.jackson.databind.json.JsonMapper` (bean z Boota), wyjątki `tools.jackson.core.JacksonException`.
 
 ---
 
@@ -141,18 +174,19 @@ Boot 4 mocno zmodularyzował i przeszedł na Jackson 3 — to kosztowało serię
 - **Add-on z własną ilością** — ✅ wprowadzone.
 - **Ceny netto/brutto** — ⏸ ODŁOŻONE do Task 4 (faktury); do tego czasu nie mieszać w modelu cen. Notatka na później: cena + stawka VAT (`VatRate`) na wariancie, API zwraca `net`/`gross`/`vatRate`, koszyk/zamówienie snapshotują oba i sumują `netTotal`/`vatTotal`/`grossTotal`; do ustalenia źródło prawdy (rekomendacja: brutto).
 - **Archetyp „Catalog”** — ❌ zostajemy przy obecnym modelu (product-service świadomie łączy Product + Catalog; wydzielenie miałoby sens przy wielu cennikach/kanałach/ofertach czasowych).
-- **`MODEL-DANYCH.md`** — brak w repo; odtworzyć (użytkownik ma sprawdzić, czy ma go lokalnie).
+- **`MODEL-DANYCH.md`** — ✅ odtworzony z kodu 2026-10-16.
 
-### Task 3 — order-service (Zamówienia) — NASTĘPNY
-Nowy mikroserwis tym samym wzorcem (skopiować pom cart-service). Port `8082`, baza `order-service-db` (`5434`).
-- **Model**: `Order` (orderNumber, status, customer, shippingAddress, billingAddress?, paymentMethod, deliveryMethod, lines[], itemsTotal, deliveryCost, grandTotal, createdAt), `OrderLine` (snapshot: productId, variantId, nameSnapshot, unitPrice, quantity, lineTotal), `Customer` (firstName, lastName, email, phone), `Address` (street, city, postalCode, country), `Money`. Enumy: `OrderStatus (NEW|PAID|PROCESSING|SHIPPED|COMPLETED|CANCELLED)`, `PaymentMethod (CARD|BLIK|TRANSFER|CASH_ON_DELIVERY)`, `DeliveryMethod (COURIER|PARCEL_LOCKER|PICKUP)`.
-- **Endpointy**: `POST /orders` (złóż — na podstawie `cartId` + danych klienta/dostawy; pobiera koszyk z cart-service przez **Feign**, snapshot pozycji), `GET /orders/{id}`, `GET /orders` (historia).
-- **Feign**: order → cart (pobranie zawartości koszyka). Po złożeniu: oznaczyć koszyk jako `CHECKED_OUT` (opcjonalnie).
-- Robić **endpoint po endpoincie** (najpierw `POST /orders` + `GET`, potem historia), weryfikować w Bruno.
+### Task 3 — order-service — ✅ GOTOWY (szczegóły w sekcjach 2 i 4)
 
-### Task 4 — Fakturowanie przez Kafkę
+### Task 4 — Fakturowanie przez Kafkę — NASTĘPNY
 - Dodać **Kafka** do compose. order-service publikuje `OrderPlaced` po złożeniu.
 - Konsument generuje **fakturę PDF** (rekomendacja: `OpenHTMLToPDF` + szablon HTML, bajty w `bytea`), endpoint `GET /orders/{id}/invoice` (`application/pdf`). Konsument może być w order-service albo osobnym serwisie.
+- **Otwarte decyzje do ustalenia PRZED kodem Task 4:**
+  - **Osobny `invoice-service`** (własna baza; specyfikacja wymienia „Fakturowanie” jako mikroserwis) czy konsument w order-service — i gdzie wtedy żyje endpoint z PDF-em.
+  - **VAT** (odłożony do Task 4, patrz wyżej): netto/brutto, `VatRate`, źródło prawdy — zmienia snapshoty w product/cart/order.
+  - **Zamówienie bez `billingAddress`** (= brak faktury): czy `OrderPlaced` i tak jest publikowany, co zwraca endpoint faktury (404?).
+  - **Dane na fakturze**: brak NIP/nazwy firmy w `Customer`/`Address` (tylko osoby prywatne czy też B2B?), dane sprzedawcy (konfiguracja?), numeracja faktur.
+  - **Dual write baza → Kafka**: zapis zamówienia + publikacja `OrderPlaced` bez outboxa może zgubić event; rozważyć transactional outbox razem ze znanym ograniczeniem nr 18 (sekcja 5).
 
 ### Task 5 — gateway-service (Interakcja / BFF)
 - Proxy, **tylko** endpointy potrzebne do procesu sprzedaży (3 ekrany). Zwraca **chude DTO** (nie przepuszcza nadmiarowych pól). Frontend rozmawia **wyłącznie** z tym serwisem.

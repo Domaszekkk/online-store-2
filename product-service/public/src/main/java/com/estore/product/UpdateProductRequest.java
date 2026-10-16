@@ -9,10 +9,6 @@ import lombok.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Body of {@code PUT /products/{id}}. Collections left as {@code null} keep their current values;
- * a provided collection (also an empty one) replaces the existing one.
- */
 @Getter
 @Setter
 @AllArgsConstructor

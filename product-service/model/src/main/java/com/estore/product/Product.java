@@ -68,10 +68,6 @@ public class Product {
         }
     }
 
-    /**
-     * Variants sent without an id are new; variants sent with their existing id keep it,
-     * so references held by carts and orders (variantId) stay valid after an update.
-     */
     private static void assignMissingVariantIds(List<ProductVariant> variants) {
         variants.forEach(variant -> {
             if (variant.getId() == null) {

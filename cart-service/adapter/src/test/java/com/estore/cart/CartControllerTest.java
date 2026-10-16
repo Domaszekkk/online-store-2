@@ -205,4 +205,27 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.message").value("Validation failed: quantity: must be greater than 0"));
         org.mockito.Mockito.verifyNoInteractions(cartService);
     }
+
+    @Test
+    void checkout_DataCorrect_Returns200WithCheckedOutCart() throws Exception {
+        UUID cartId = UUID.randomUUID();
+        Cart cart = cartWithItem(cartId);
+        cart.setStatus(CartStatus.CHECKED_OUT);
+        when(cartService.checkout(cartId)).thenReturn(cart);
+
+        mockMvc.perform(post("/carts/{id}/checkout", cartId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CHECKED_OUT"))
+                .andExpect(jsonPath("$.items[0].stockKeepingUnit").value("PBX15-I7-16"));
+    }
+
+    @Test
+    void checkout_EmptyCart_Returns409() throws Exception {
+        UUID cartId = UUID.randomUUID();
+        when(cartService.checkout(cartId)).thenThrow(new EmptyCartException(cartId));
+
+        mockMvc.perform(post("/carts/{id}/checkout", cartId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Cart with id " + cartId + " is empty and cannot be checked out"));
+    }
 }

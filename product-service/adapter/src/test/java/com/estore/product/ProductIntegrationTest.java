@@ -39,7 +39,6 @@ class ProductIntegrationTest {
                 .build();
     }
 
-    /** Add-ons must reference existing products, so the accessory is created first. */
     private AddProductCommand sampleLaptopCommand() throws Exception {
         UUID accessoryId = UUID.fromString(createProduct(accessoryCommand()));
         return AddProductCommand.builder()
@@ -157,7 +156,6 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.name").value("ProBook X15 Gen2"))
                 .andExpect(jsonPath("$.description").value("Updated laptop"));
 
-        // collections not sent in the request must stay untouched
         mockMvc.perform(get("/products/{id}", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("ProBook X15 Gen2"))

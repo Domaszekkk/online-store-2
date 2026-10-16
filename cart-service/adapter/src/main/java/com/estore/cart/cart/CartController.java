@@ -84,4 +84,16 @@ public class CartController {
                               @Parameter(description = "Id of the cart item") @PathVariable UUID itemId) {
         return cartMapper.toDto(cartService.removeItem(id, itemId));
     }
+
+    @Operation(summary = "Check out cart",
+            description = "Closes the cart for ordering (status CHECKED_OUT) and returns its final content; used by order-service when an order is placed")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Cart checked out"),
+            @ApiResponse(responseCode = "404", description = "Cart not found"),
+            @ApiResponse(responseCode = "409", description = "Cart is empty or already checked out")
+    })
+    @PostMapping("/{id}/checkout")
+    public CartDto checkout(@Parameter(description = "Id of the cart") @PathVariable UUID id) {
+        return cartMapper.toDto(cartService.checkout(id));
+    }
 }

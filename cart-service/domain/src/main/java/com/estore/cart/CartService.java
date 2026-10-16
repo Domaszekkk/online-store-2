@@ -53,6 +53,12 @@ public class CartService {
         return cartRepositoryPort.save(cart);
     }
 
+    public Cart checkout(UUID cartId) {
+        Cart cart = getCartById(cartId);
+        cart.checkout();
+        return cartRepositoryPort.save(cart);
+    }
+
     private List<CartItemAddOn> resolveAddOns(ProductDetails product, List<AddOnSelection> selections) {
         if (selections == null || selections.isEmpty()) {
             return new ArrayList<>();

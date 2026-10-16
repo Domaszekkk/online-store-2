@@ -210,7 +210,6 @@ class CartServiceTest {
         assertAll(
                 () -> assertEquals(2, item.getQuantity()),
                 () -> assertEquals(1, item.getAddOns().get(0).getQuantity()),
-                // 2 x 4599.00 + 1 x 199.00
                 () -> assertAmount("9397.00", item.getLineTotal()),
                 () -> assertAmount("9397.00", result.getTotal())
         );
@@ -258,7 +257,6 @@ class CartServiceTest {
                 () -> assertEquals(1, result.getItems().size()),
                 () -> assertEquals(4, item.getQuantity()),
                 () -> assertEquals(2, item.getAddOns().get(0).getQuantity()),
-                // 4 x 4599.00 + 2 x 199.00
                 () -> assertAmount("18794.00", result.getTotal())
         );
     }
@@ -296,7 +294,6 @@ class CartServiceTest {
 
         assertAll(
                 () -> assertEquals(1, result.getItems().get(0).getAddOns().get(0).getQuantity()),
-                // 3 x 4599.00 + 1 x 199.00
                 () -> assertAmount("13996.00", result.getTotal())
         );
     }
@@ -391,5 +388,48 @@ class CartServiceTest {
         when(cartRepositoryPort.findById(cartId)).thenReturn(Optional.of(cart));
 
         Assertions.assertThrows(CartNotActiveException.class, () -> cartService.removeItem(cartId, itemId));
+    }
+
+    @Test
+    void checkout_CartWithItems_ChangesStatusToCheckedOut() {
+        UUID cartId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        Cart cart = emptyCart(cartId);
+        cart.addItem(CartItem.create(productId, "ProBook X15",
+                product(productId, variantId, "AVAILABLE").getVariants().get(0), 1, new ArrayList<>()));
+        when(cartRepositoryPort.findById(cartId)).thenReturn(Optional.of(cart));
+        when(cartRepositoryPort.save(any(Cart.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Cart result = cartService.checkout(cartId);
+
+        assertAll(
+                () -> assertEquals(CartStatus.CHECKED_OUT, result.getStatus()),
+                () -> assertEquals(1, result.getItems().size())
+        );
+    }
+
+    @Test
+    void checkout_EmptyCart_ThrowsEmptyCartException() {
+        UUID cartId = UUID.randomUUID();
+        when(cartRepositoryPort.findById(cartId)).thenReturn(Optional.of(emptyCart(cartId)));
+
+        EmptyCartException exception = Assertions.assertThrows(
+                EmptyCartException.class, () -> cartService.checkout(cartId));
+
+        assertEquals(409, exception.getResponseCode());
+    }
+
+    @Test
+    void checkout_CartAlreadyCheckedOut_ThrowsCartNotActiveException() {
+        UUID cartId = UUID.randomUUID();
+        Cart checkedOutCart = emptyCart(cartId);
+        checkedOutCart.setStatus(CartStatus.CHECKED_OUT);
+        when(cartRepositoryPort.findById(cartId)).thenReturn(Optional.of(checkedOutCart));
+
+        CartNotActiveException exception = Assertions.assertThrows(
+                CartNotActiveException.class, () -> cartService.checkout(cartId));
+
+        assertEquals(409, exception.getResponseCode());
     }
 }

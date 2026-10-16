@@ -4,10 +4,6 @@ import lombok.*;
 
 import java.util.UUID;
 
-/**
- * Add-on chosen for a cart item, with its own quantity independent of the item quantity
- * (e.g. two laptops but only one cable).
- */
 @Getter
 @Setter
 @AllArgsConstructor

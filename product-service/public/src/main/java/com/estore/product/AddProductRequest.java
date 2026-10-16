@@ -9,7 +9,6 @@ import lombok.*;
 import java.util.List;
 import java.util.Map;
 
-/** Body of {@code POST /products}. */
 @Getter
 @Setter
 @AllArgsConstructor

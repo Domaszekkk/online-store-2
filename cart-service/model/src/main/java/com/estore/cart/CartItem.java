@@ -63,10 +63,6 @@ public class CartItem {
         return variantId.equals(other.variantId) && addOnProductIds().equals(other.addOnProductIds());
     }
 
-    /**
-     * Merges another item with the same configuration into this one:
-     * item quantity and each add-on quantity are summed.
-     */
     public void absorb(CartItem other) {
         this.quantity += other.quantity;
         for (CartItemAddOn otherAddOn : other.addOns) {
@@ -85,7 +81,6 @@ public class CartItem {
         return addOns.stream().map(CartItemAddOn::getProductId).collect(Collectors.toSet());
     }
 
-    /** Add-ons have their own quantity, so they are not multiplied by the item quantity. */
     private void recomputeLineTotal() {
         Money addOnsTotal = (addOns == null ? List.<CartItemAddOn>of() : addOns).stream()
                 .map(CartItemAddOn::total)

@@ -149,7 +149,6 @@ class CartIntegrationTest {
         mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk());
 
-        // 2 x 4599.00 + 1 x 39.00
         mockMvc.perform(get("/carts/{id}", cartId))
                 .andExpect(jsonPath("$.items[0].quantity").value(2))
                 .andExpect(jsonPath("$.items[0].addOns[0].quantity").value(1))
@@ -166,5 +165,31 @@ class CartIntegrationTest {
                         .content("{\"quantity\":1}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Validation failed: ")));
+    }
+
+    @Test
+    void checkout_thenModifyOrCheckoutAgain_Returns409() throws Exception {
+        String cartId = createCart();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+        String body = "{\"productId\":\"%s\",\"variantId\":\"%s\",\"quantity\":1}".formatted(productId, variantId);
+
+        mockMvc.perform(post("/carts/{id}/checkout", cartId))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/carts/{id}/checkout", cartId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CHECKED_OUT"))
+                .andExpect(jsonPath("$.items.length()").value(1));
+
+        mockMvc.perform(get("/carts/{id}", cartId))
+                .andExpect(jsonPath("$.status").value("CHECKED_OUT"));
+        mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/carts/{id}/checkout", cartId))
+                .andExpect(status().isConflict());
     }
 }

@@ -24,10 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-/**
- * Verifies the Feign resilience setup against a real HTTP server standing in for product-service:
- * 5xx responses are retried (up to max-attempts), 404 is not retried.
- */
 @SpringBootTest(properties = {
         "product.service.retry.period-millis=10",
         "product.service.retry.max-period-millis=20",
