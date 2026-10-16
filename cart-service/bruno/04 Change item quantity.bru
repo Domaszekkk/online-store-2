@@ -1,0 +1,21 @@
+meta {
+  name: 04 Change item quantity
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/carts/{{cartId}}/items/{{itemId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "quantity": 3
+  }
+}

@@ -1,0 +1,38 @@
+meta {
+  name: 01 Create product (ELECTRONICS)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Kabel HDMI 2m",
+    "type": "ELECTRONICS",
+    "description": "Kabel HDMI 2.1",
+    "basePrice": { "amount": 39.00, "currency": "PLN" },
+    "variants": [
+      { "stockKeepingUnit": "HDMI-2M", "price": { "amount": 39.00, "currency": "PLN" }, "availability": "AVAILABLE" }
+    ]
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("addOnProductId", res.getBody().id);
+  }
+}
+
+docs {
+  Akcesorium tworzymy jako pierwsze: laptop (02) wskazuje je jako add-on,
+  a product-service odrzuca (400) add-ony wskazujace nieistniejacy produkt.
+}
