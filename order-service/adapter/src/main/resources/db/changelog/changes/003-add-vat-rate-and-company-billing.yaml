@@ -1,0 +1,59 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-add-vat-rate-to-order-lines
+      author: estore
+      comment: "Order line keeps a snapshot of the VAT rate next to the gross unit price; existing rows default to VAT_23"
+      changes:
+        - addColumn:
+            tableName: order_lines
+            columns:
+              - column:
+                  name: vat_rate
+                  type: VARCHAR(20)
+                  defaultValue: VAT_23
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: order_lines
+            columnName: vat_rate
+  - changeSet:
+      id: 004-add-vat-rate-to-order-line-addons
+      author: estore
+      comment: "Order line add-on keeps a snapshot of the VAT rate next to the gross price; existing rows default to VAT_23"
+      changes:
+        - addColumn:
+            tableName: order_line_addons
+            columns:
+              - column:
+                  name: vat_rate
+                  type: VARCHAR(20)
+                  defaultValue: VAT_23
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: order_line_addons
+            columnName: vat_rate
+  - changeSet:
+      id: 005-add-company-data-to-billing-address
+      author: estore
+      comment: "Invoice for a company needs its name and tax identification number; both null means an invoice for a private person"
+      changes:
+        - addColumn:
+            tableName: orders
+            columns:
+              - column:
+                  name: billing_company_name
+                  type: VARCHAR(255)
+              - column:
+                  name: billing_tax_identification_number
+                  type: VARCHAR(10)
+      rollback:
+        - dropColumn:
+            tableName: orders
+            columns:
+              - column:
+                  name: billing_company_name
+              - column:
+                  name: billing_tax_identification_number

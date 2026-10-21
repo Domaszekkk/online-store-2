@@ -1,0 +1,49 @@
+meta {
+  name: 03 Place order with company invoice
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{orderServiceUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{cartId}}",
+    "customer": { "firstName": "Jan", "lastName": "Kowalski", "email": "{{customerEmail}}", "phone": "+48 600 100 200" },
+    "shippingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "billingAddress": {
+      "companyName": "Kowalski Sp. z o.o.",
+      "taxIdentificationNumber": "5260250274",
+      "street": "Firmowa 5", "city": "Kraków", "postalCode": "30-001", "country": "Polska"
+    },
+    "paymentMethod": "BLIK",
+    "deliveryMethod": "COURIER"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.status: eq NEW
+  res.body.grandTotal.amount: eq 9295.99
+  res.body.billingAddress.taxIdentificationNumber: eq "5260250274"
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("orderId", res.getBody().id);
+  }
+}
+
+docs {
+  Closes the cart in cart-service, copies its items with prices and VAT rates, adds courier delivery (19.99).
+  9276.00 + 19.99 = 9295.99. With companyName + taxIdentificationNumber the invoice is issued for the company.
+  The OrderPlaced event goes through the outbox and Kafka to invoice-service (folder 4).
+}

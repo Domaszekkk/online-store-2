@@ -1,0 +1,25 @@
+meta {
+  name: 08 Create second cart
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{cartServiceUrl}}/carts
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("secondCartId", res.getBody().id);
+  }
+}
+
+docs {
+  Second purchase - this time without an invoice.
+}

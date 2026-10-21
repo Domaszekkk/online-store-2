@@ -1,0 +1,37 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-add-vat-rate-to-product-variants
+      author: estore
+      comment: "Variant price is gross; the VAT rate is stored next to it, existing rows default to VAT_23"
+      changes:
+        - addColumn:
+            tableName: product_variants
+            columns:
+              - column:
+                  name: vat_rate
+                  type: VARCHAR(20)
+                  defaultValue: VAT_23
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: product_variants
+            columnName: vat_rate
+  - changeSet:
+      id: 009-add-vat-rate-to-add-ons
+      author: estore
+      comment: "Add-on price is gross; the VAT rate is stored next to it, existing rows default to VAT_23"
+      changes:
+        - addColumn:
+            tableName: add_ons
+            columns:
+              - column:
+                  name: vat_rate
+                  type: VARCHAR(20)
+                  defaultValue: VAT_23
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: add_ons
+            columnName: vat_rate

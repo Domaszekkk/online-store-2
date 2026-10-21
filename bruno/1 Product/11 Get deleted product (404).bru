@@ -1,0 +1,15 @@
+meta {
+  name: 11 Get deleted product (404)
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{productServiceUrl}}/products/{{temporaryProductId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+}

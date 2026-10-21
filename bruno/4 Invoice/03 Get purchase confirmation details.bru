@@ -1,0 +1,22 @@
+meta {
+  name: 03 Get purchase confirmation details
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{invoiceServiceUrl}}/documents/order/{{confirmationOrderId}}/details
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.type: eq PURCHASE_CONFIRMATION
+  res.body.number: startsWith PZ/
+  res.body.buyer: isNull
+}
+
+docs {
+  Order without billingAddress -> purchase confirmation (not a VAT invoice, no buyer data).
+}

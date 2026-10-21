@@ -1,0 +1,23 @@
+meta {
+  name: 06 Get order history of customer
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{orderServiceUrl}}/orders?email={{customerEmail}}
+  body: none
+  auth: none
+}
+
+params:query {
+  email: {{customerEmail}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Orders of one customer, newest first; email is compared without letter case.
+}

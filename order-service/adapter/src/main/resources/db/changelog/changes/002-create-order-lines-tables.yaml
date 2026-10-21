@@ -1,0 +1,96 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-order-lines-table
+      author: estore
+      comment: "Creates the order_lines table (snapshot of cart items)"
+      changes:
+        - createTable:
+            tableName: order_lines
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_order_lines
+                    nullable: false
+              - column:
+                  name: order_id
+                  type: UUID
+                  constraints:
+                    foreignKeyName: fk_order_lines_order
+                    references: orders(id)
+              - column:
+                  name: line_number
+                  type: INT
+              - column:
+                  name: product_id
+                  type: UUID
+              - column:
+                  name: variant_id
+                  type: UUID
+              - column:
+                  name: product_name
+                  type: VARCHAR(255)
+              - column:
+                  name: stock_keeping_unit
+                  type: VARCHAR(255)
+              - column:
+                  name: unit_price_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: unit_price_currency
+                  type: VARCHAR(3)
+              - column:
+                  name: quantity
+                  type: INT
+              - column:
+                  name: line_total_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: line_total_currency
+                  type: VARCHAR(3)
+      rollback:
+        - dropTable:
+            tableName: order_lines
+
+  - changeSet:
+      id: 004-create-order-line-addons-table
+      author: estore
+      comment: "Creates the order_line_addons table"
+      changes:
+        - createTable:
+            tableName: order_line_addons
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_order_line_addons
+                    nullable: false
+              - column:
+                  name: order_line_id
+                  type: UUID
+                  constraints:
+                    foreignKeyName: fk_order_line_addons_line
+                    references: order_lines(id)
+              - column:
+                  name: product_ref_id
+                  type: UUID
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: price_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: price_currency
+                  type: VARCHAR(3)
+              - column:
+                  name: quantity
+                  type: INT
+      rollback:
+        - dropTable:
+            tableName: order_line_addons

@@ -1,0 +1,182 @@
+services:
+  product-service-db:
+    image: postgres:17
+    container_name: product-service-db
+    environment:
+      POSTGRES_DB: product_service
+      POSTGRES_USER: product_service
+      POSTGRES_PASSWORD: product_service
+    ports:
+      - "5432:5432"
+    volumes:
+      - product-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U product_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  product-service:
+    build:
+      context: ./product-service
+    container_name: product-service-app
+    restart: on-failure
+    depends_on:
+      product-service-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://product-service-db:5432/product_service
+      SPRING_DATASOURCE_USERNAME: product_service
+      SPRING_DATASOURCE_PASSWORD: product_service
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m"
+    ports:
+      - "8080:8080"
+
+  cart-service-db:
+    image: postgres:17
+    container_name: cart-service-db
+    environment:
+      POSTGRES_DB: cart_service
+      POSTGRES_USER: cart_service
+      POSTGRES_PASSWORD: cart_service
+    ports:
+      - "5433:5432"
+    volumes:
+      - cart-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cart_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  cart-service:
+    build:
+      context: ./cart-service
+    container_name: cart-service-app
+    restart: on-failure
+    depends_on:
+      cart-service-db:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://cart-service-db:5432/cart_service
+      SPRING_DATASOURCE_USERNAME: cart_service
+      SPRING_DATASOURCE_PASSWORD: cart_service
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m"
+      PRODUCT_SERVICE_URL: http://product-service:8080
+    ports:
+      - "8081:8081"
+
+  order-service-db:
+    image: postgres:17
+    container_name: order-service-db
+    environment:
+      POSTGRES_DB: order_service
+      POSTGRES_USER: order_service
+      POSTGRES_PASSWORD: order_service
+    ports:
+      - "5434:5432"
+    volumes:
+      - order-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U order_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  order-service:
+    build:
+      context: ./order-service
+    container_name: order-service-app
+    restart: on-failure
+    depends_on:
+      order-service-db:
+        condition: service_healthy
+      cart-service:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://order-service-db:5432/order_service
+      SPRING_DATASOURCE_USERNAME: order_service
+      SPRING_DATASOURCE_PASSWORD: order_service
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m"
+      CART_SERVICE_URL: http://cart-service:8081
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8082:8082"
+
+  invoice-service-db:
+    image: postgres:17
+    container_name: invoice-service-db
+    environment:
+      POSTGRES_DB: invoice_service
+      POSTGRES_USER: invoice_service
+      POSTGRES_PASSWORD: invoice_service
+    ports:
+      - "5435:5432"
+    volumes:
+      - invoice-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invoice_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  invoice-service:
+    build:
+      context: ./invoice-service
+    container_name: invoice-service-app
+    restart: on-failure
+    depends_on:
+      invoice-service-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://invoice-service-db:5432/invoice_service
+      SPRING_DATASOURCE_USERNAME: invoice_service
+      SPRING_DATASOURCE_PASSWORD: invoice_service
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8083:8083"
+
+  kafka:
+    image: apache/kafka:4.3.1
+    container_name: kafka
+    environment:
+      CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9094:9094"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 120s
+
+volumes:
+  product-postgres-data:
+  cart-postgres-data:
+  order-postgres-data:
+  invoice-postgres-data:
+  kafka-data:

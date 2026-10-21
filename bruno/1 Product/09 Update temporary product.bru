@@ -1,0 +1,30 @@
+meta {
+  name: 09 Update temporary product
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{productServiceUrl}}/products/{{temporaryProductId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Ksiazka testowa - wydanie 2",
+    "type": "ELECTRONICS",
+    "description": "Pominiete kolekcje (variants, addOns, options, attributes) zostaja bez zmian",
+    "basePrice": { "amount": 59.90, "currency": "PLN" }
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.name: eq Ksiazka testowa - wydanie 2
+  res.body.variants.length: eq 1
+}

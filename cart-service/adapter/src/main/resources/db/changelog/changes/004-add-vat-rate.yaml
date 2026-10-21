@@ -1,0 +1,37 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-add-vat-rate-to-cart-items
+      author: estore
+      comment: "Cart item keeps a snapshot of the VAT rate next to the gross unit price; existing rows default to VAT_23"
+      changes:
+        - addColumn:
+            tableName: cart_items
+            columns:
+              - column:
+                  name: vat_rate
+                  type: VARCHAR(20)
+                  defaultValue: VAT_23
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: cart_items
+            columnName: vat_rate
+  - changeSet:
+      id: 005-add-vat-rate-to-cart-item-addons
+      author: estore
+      comment: "Cart item add-on keeps a snapshot of the VAT rate next to the gross price; existing rows default to VAT_23"
+      changes:
+        - addColumn:
+            tableName: cart_item_addons
+            columns:
+              - column:
+                  name: vat_rate
+                  type: VARCHAR(20)
+                  defaultValue: VAT_23
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: cart_item_addons
+            columnName: vat_rate

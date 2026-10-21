@@ -1,0 +1,22 @@
+meta {
+  name: 07 Get invoice for private person
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{invoiceServiceUrl}}/documents/order/{{retryOrderId}}/details
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.type: eq INVOICE
+  res.body.buyer.fullName: eq Jan Kowalski
+  res.body.buyer.companyName: isNull
+}
+
+script:pre-request {
+  await new Promise(resolve => setTimeout(resolve, 3000));
+}

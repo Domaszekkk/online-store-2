@@ -1,0 +1,114 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-order-number-sequence
+      author: estore
+      comment: "Sequence behind human-readable order numbers (ORD-year-number)"
+      changes:
+        - createSequence:
+            sequenceName: order_number_seq
+            startValue: 1
+            incrementBy: 1
+      rollback:
+        - dropSequence:
+            sequenceName: order_number_seq
+
+  - changeSet:
+      id: 002-create-orders-table
+      author: estore
+      comment: "Creates the orders table (customer, addresses and totals embedded as columns)"
+      changes:
+        - createTable:
+            tableName: orders
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_orders
+                    nullable: false
+              - column:
+                  name: order_number
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_orders_order_number
+              - column:
+                  name: cart_id
+                  type: UUID
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+              - column:
+                  name: customer_first_name
+                  type: VARCHAR(100)
+              - column:
+                  name: customer_last_name
+                  type: VARCHAR(100)
+              - column:
+                  name: customer_email
+                  type: VARCHAR(255)
+              - column:
+                  name: customer_phone
+                  type: VARCHAR(20)
+              - column:
+                  name: shipping_street
+                  type: VARCHAR(255)
+              - column:
+                  name: shipping_city
+                  type: VARCHAR(100)
+              - column:
+                  name: shipping_postal_code
+                  type: VARCHAR(20)
+              - column:
+                  name: shipping_country
+                  type: VARCHAR(100)
+              - column:
+                  name: billing_street
+                  type: VARCHAR(255)
+              - column:
+                  name: billing_city
+                  type: VARCHAR(100)
+              - column:
+                  name: billing_postal_code
+                  type: VARCHAR(20)
+              - column:
+                  name: billing_country
+                  type: VARCHAR(100)
+              - column:
+                  name: payment_method
+                  type: VARCHAR(50)
+              - column:
+                  name: delivery_method
+                  type: VARCHAR(50)
+              - column:
+                  name: items_total_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: items_total_currency
+                  type: VARCHAR(3)
+              - column:
+                  name: delivery_cost_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: delivery_cost_currency
+                  type: VARCHAR(3)
+              - column:
+                  name: grand_total_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: grand_total_currency
+                  type: VARCHAR(3)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+        - createIndex:
+            tableName: orders
+            indexName: idx_orders_customer_email
+            columns:
+              - column:
+                  name: customer_email
+      rollback:
+        - dropTable:
+            tableName: orders

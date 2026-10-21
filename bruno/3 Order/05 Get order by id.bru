@@ -1,0 +1,16 @@
+meta {
+  name: 05 Get order by id
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{orderServiceUrl}}/orders/{{orderId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.lines[0].vatRate: eq VAT_23
+}
