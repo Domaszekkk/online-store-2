@@ -57,11 +57,13 @@ class ProductIntegrationTest {
                         .optionValues(Map.of("Procesor", "i7"))
                         .price(Money.of(new BigDecimal("4599.00"), "PLN"))
                         .availability(Availability.AVAILABLE)
+                        .vatRate(VatRate.VAT_23)
                         .build()))
                 .addOns(List.of(AddOn.builder()
                         .productId(accessoryId)
                         .name("Mysz")
                         .price(Money.of(new BigDecimal("99.00"), "PLN"))
+                        .vatRate(VatRate.VAT_8)
                         .build()))
                 .build();
     }
@@ -94,7 +96,9 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.variants[0].id").exists())
                 .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value("PBX15-I7-16"))
                 .andExpect(jsonPath("$.variants[0].availability").value("AVAILABLE"))
+                .andExpect(jsonPath("$.variants[0].vatRate").value("VAT_23"))
                 .andExpect(jsonPath("$.addOns[0].name").value("Mysz"))
+                .andExpect(jsonPath("$.addOns[0].vatRate").value("VAT_8"))
                 .andReturn().getResponse().getContentAsString();
 
         String id = objectMapper.readTree(created).get("id").asText();
@@ -106,7 +110,9 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.name").value("ProBook X15"))
                 .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value("PBX15-I7-16"))
-                .andExpect(jsonPath("$.variants[0].optionValues.Procesor").value("i7"));
+                .andExpect(jsonPath("$.variants[0].optionValues.Procesor").value("i7"))
+                .andExpect(jsonPath("$.variants[0].vatRate").value("VAT_23"))
+                .andExpect(jsonPath("$.addOns[0].vatRate").value("VAT_8"));
     }
 
     @Test
@@ -196,7 +202,7 @@ class ProductIntegrationTest {
         UUID missingProductId = UUID.randomUUID();
         String body = """
                 {"name":"ProBook X15","type":"COMPUTER","basePrice":{"amount":3999.00,"currency":"PLN"},
-                 "addOns":[{"productId":"%s","name":"Mysz","price":{"amount":99.00,"currency":"PLN"}}]}
+                 "addOns":[{"productId":"%s","name":"Mysz","price":{"amount":99.00,"currency":"PLN"},"vatRate":"VAT_23"}]}
                 """.formatted(missingProductId);
 
         mockMvc.perform(post("/products")
@@ -216,9 +222,9 @@ class ProductIntegrationTest {
                 {"name":"ProBook X15","type":"COMPUTER","basePrice":{"amount":3999.00,"currency":"PLN"},
                  "variants":[
                    {"id":"%s","stockKeepingUnit":"PBX15-I7-16","optionValues":{"Procesor":"i7"},
-                    "price":{"amount":4499.00,"currency":"PLN"},"availability":"AVAILABLE"},
+                    "price":{"amount":4499.00,"currency":"PLN"},"availability":"AVAILABLE","vatRate":"VAT_23"},
                    {"stockKeepingUnit":"PBX15-I9-32","optionValues":{"Procesor":"i9"},
-                    "price":{"amount":5799.00,"currency":"PLN"},"availability":"COMING_SOON"}
+                    "price":{"amount":5799.00,"currency":"PLN"},"availability":"COMING_SOON","vatRate":"VAT_5"}
                  ],
                  "addOns":[]}
                 """.formatted(existingVariantId);
@@ -235,6 +241,8 @@ class ProductIntegrationTest {
                         .value(org.hamcrest.Matchers.hasItem(existingVariantId)))
                 .andExpect(jsonPath("$.variants[?(@.stockKeepingUnit=='PBX15-I7-16')].price.amount")
                         .value(org.hamcrest.Matchers.hasItem(4499.00)))
+                .andExpect(jsonPath("$.variants[?(@.stockKeepingUnit=='PBX15-I9-32')].vatRate")
+                        .value(org.hamcrest.Matchers.hasItem("VAT_5")))
                 .andExpect(jsonPath("$.addOns.length()").value(0))
                 .andExpect(jsonPath("$.options.length()").value(1));
     }

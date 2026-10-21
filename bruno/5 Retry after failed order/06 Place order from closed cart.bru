@@ -1,0 +1,42 @@
+meta {
+  name: 06 Place order from closed cart
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{orderServiceUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{retryCartId}}",
+    "customer": { "firstName": "Jan", "lastName": "Kowalski", "email": "{{customerEmail}}", "phone": "+48 600 100 200" },
+    "shippingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "billingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "paymentMethod": "TRANSFER",
+    "deliveryMethod": "PICKUP"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.grandTotal.amount: eq 4599
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("retryOrderId", res.getBody().id);
+  }
+}
+
+docs {
+  Before the fix this returned 409 ("cart is CHECKED_OUT") and the customer could not buy anything.
+  Now the order is created. Billing address without company data -> invoice for a private person; pickup is free.
+}

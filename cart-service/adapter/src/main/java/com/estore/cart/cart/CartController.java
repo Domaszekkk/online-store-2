@@ -86,11 +86,12 @@ public class CartController {
     }
 
     @Operation(summary = "Check out cart",
-            description = "Closes the cart for ordering (status CHECKED_OUT) and returns its final content; used by order-service when an order is placed")
+            description = "Closes the cart for ordering (status CHECKED_OUT) and returns its final content; used by order-service when an order is placed. "
+                    + "Idempotent: calling it again for a checked out cart returns the same content, so order-service can safely retry")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Cart checked out"),
+            @ApiResponse(responseCode = "200", description = "Cart checked out (now or earlier)"),
             @ApiResponse(responseCode = "404", description = "Cart not found"),
-            @ApiResponse(responseCode = "409", description = "Cart is empty or already checked out")
+            @ApiResponse(responseCode = "409", description = "Cart is empty")
     })
     @PostMapping("/{id}/checkout")
     public CartDto checkout(@Parameter(description = "Id of the cart") @PathVariable UUID id) {

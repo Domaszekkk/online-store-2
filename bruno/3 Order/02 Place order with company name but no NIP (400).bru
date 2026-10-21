@@ -1,0 +1,34 @@
+meta {
+  name: 02 Place order with company name but no NIP (400)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{orderServiceUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{cartId}}",
+    "customer": { "firstName": "Jan", "lastName": "Kowalski", "email": "{{customerEmail}}", "phone": "+48 600 100 200" },
+    "shippingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "billingAddress": {
+      "companyName": "Kowalski Sp. z o.o.",
+      "street": "Firmowa 5", "city": "Kraków", "postalCode": "30-001", "country": "Polska"
+    },
+    "paymentMethod": "BLIK",
+    "deliveryMethod": "COURIER"
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: contains must be provided together with companyName
+}

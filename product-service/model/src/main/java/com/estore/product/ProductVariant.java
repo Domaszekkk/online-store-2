@@ -19,4 +19,5 @@ public class ProductVariant {
     private Map<String, String> optionValues = new HashMap<>();
     private Money price;
     private Availability availability;
+    private VatRate vatRate;
 }

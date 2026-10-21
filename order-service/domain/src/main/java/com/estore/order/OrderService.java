@@ -9,11 +9,23 @@ import java.util.UUID;
 public class OrderService {
     private final OrderRepositoryPort orderRepositoryPort;
     private final CartCheckoutPort cartCheckoutPort;
+    private final OrderEventPort orderEventPort;
+    private final TransactionPort transactionPort;
 
     public Order placeOrder(PlaceOrderCommand command) {
+        if (command.getBillingAddress() != null) {
+            command.getBillingAddress().requireValid();
+        }
+        orderRepositoryPort.findByCartId(command.getCartId()).ifPresent(existing -> {
+            throw new OrderAlreadyPlacedException(command.getCartId(), existing.getOrderNumber());
+        });
         CartDetails cart = cartCheckoutPort.checkout(command.getCartId());
-        Order order = Order.place(command, cart, orderRepositoryPort.nextOrderSequenceNumber());
-        return orderRepositoryPort.save(order);
+        return transactionPort.inTransaction(() -> {
+            Order order = Order.place(command, cart, orderRepositoryPort.nextOrderSequenceNumber());
+            Order savedOrder = orderRepositoryPort.save(order);
+            orderEventPort.orderPlaced(savedOrder);
+            return savedOrder;
+        });
     }
 
     public Order getOrderById(UUID id) {

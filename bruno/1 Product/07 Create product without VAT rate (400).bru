@@ -1,0 +1,31 @@
+meta {
+  name: 07 Create product without VAT rate (400)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{productServiceUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Mysz",
+    "type": "ELECTRONICS",
+    "basePrice": { "amount": 99.00, "currency": "PLN" },
+    "variants": [
+      { "stockKeepingUnit": "MOUSE-1", "price": { "amount": 99.00, "currency": "PLN" }, "availability": "AVAILABLE" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: contains variants[0].vatRate
+}

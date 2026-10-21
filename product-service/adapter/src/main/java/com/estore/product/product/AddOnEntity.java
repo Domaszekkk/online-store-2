@@ -1,5 +1,6 @@
 package com.estore.product.product;
 
+import com.estore.product.VatRate;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -30,4 +31,8 @@ public class AddOnEntity {
             @AttributeOverride(name = "currency", column = @Column(name = "price_currency", length = 3))
     })
     private MoneyEmbeddable price;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vat_rate", length = 20)
+    private VatRate vatRate;
 }

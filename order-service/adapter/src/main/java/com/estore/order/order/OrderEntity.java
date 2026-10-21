@@ -46,13 +46,7 @@ public class OrderEntity {
     private AddressEmbeddable shippingAddress;
 
     @Embedded
-    @AttributeOverrides({
-            @AttributeOverride(name = "street", column = @Column(name = "billing_street")),
-            @AttributeOverride(name = "city", column = @Column(name = "billing_city", length = 100)),
-            @AttributeOverride(name = "postalCode", column = @Column(name = "billing_postal_code", length = 20)),
-            @AttributeOverride(name = "country", column = @Column(name = "billing_country", length = 100))
-    })
-    private AddressEmbeddable billingAddress;
+    private BillingAddressEmbeddable billingAddress;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", length = 50)

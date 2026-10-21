@@ -9,6 +9,7 @@ public record CartItemResponse(
         String productName,
         String stockKeepingUnit,
         MoneyPayload unitPrice,
+        String vatRate,
         int quantity,
         List<CartItemAddOnResponse> addOns
 ) {

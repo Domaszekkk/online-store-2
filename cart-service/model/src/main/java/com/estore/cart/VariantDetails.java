@@ -14,6 +14,7 @@ public class VariantDetails {
     private String stockKeepingUnit;
     private Money price;
     private String availability;
+    private VatRate vatRate;
 
     public boolean isAvailable() {
         return "AVAILABLE".equals(availability);

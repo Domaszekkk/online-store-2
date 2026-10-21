@@ -17,6 +17,7 @@ public class OrderLineDto {
     private String productName;
     private String stockKeepingUnit;
     private MoneyDto unitPrice;
+    private String vatRate;
     private int quantity;
     private List<OrderLineAddOnDto> addOns;
     private MoneyDto lineTotal;

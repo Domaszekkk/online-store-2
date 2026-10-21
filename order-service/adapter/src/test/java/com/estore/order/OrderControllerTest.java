@@ -59,15 +59,17 @@ class OrderControllerTest {
                         .firstName("Jan").lastName("Kowalski").email("jan.kowalski@example.com").phone("+48 600 100 200")
                         .build())
                 .shippingAddress(address)
-                .billingAddress(address)
+                .billingAddress(BillingAddress.builder()
+                        .companyName("Kowalski Sp. z o.o.").taxIdentificationNumber("5260250274")
+                        .street("Firmowa 5").city("Kraków").postalCode("30-001").country("Polska").build())
                 .paymentMethod(PaymentMethod.BLIK)
                 .deliveryMethod(DeliveryMethod.COURIER)
                 .lines(List.of(OrderLine.builder()
                         .id(UUID.randomUUID()).productId(UUID.randomUUID()).variantId(UUID.randomUUID())
                         .productName("ProBook X15").stockKeepingUnit("PBX15-I7-16")
-                        .unitPrice(pln("4599.00")).quantity(2)
+                        .unitPrice(pln("4599.00")).vatRate(VatRate.VAT_23).quantity(2)
                         .addOns(List.of(OrderLineAddOn.builder()
-                                .productId(UUID.randomUUID()).name("Kabel HDMI 2m").price(pln("39.00")).quantity(1)
+                                .productId(UUID.randomUUID()).name("Kabel HDMI 2m").price(pln("39.00")).vatRate(VatRate.VAT_8).quantity(1)
                                 .build()))
                         .lineTotal(pln("9237.00"))
                         .build()))
@@ -93,7 +95,11 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.paymentMethod").value("BLIK"))
                 .andExpect(jsonPath("$.deliveryMethod").value("COURIER"))
                 .andExpect(jsonPath("$.customer.email").value("jan.kowalski@example.com"))
-                .andExpect(jsonPath("$.billingAddress.city").value("Warszawa"))
+                .andExpect(jsonPath("$.billingAddress.city").value("Kraków"))
+                .andExpect(jsonPath("$.billingAddress.companyName").value("Kowalski Sp. z o.o."))
+                .andExpect(jsonPath("$.billingAddress.taxIdentificationNumber").value("5260250274"))
+                .andExpect(jsonPath("$.lines[0].vatRate").value("VAT_23"))
+                .andExpect(jsonPath("$.lines[0].addOns[0].vatRate").value("VAT_8"))
                 .andExpect(jsonPath("$.lines[0].addOns[0].quantity").value(1))
                 .andExpect(jsonPath("$.grandTotal.amount").value(9256.99));
     }
@@ -135,6 +141,37 @@ class OrderControllerTest {
     }
 
     @Test
+    void placeOrder_CompanyNameWithoutTaxIdentificationNumber_Returns400() throws Exception {
+        String body = VALID_BODY.formatted(UUID.randomUUID()).replace("\"paymentMethod\"",
+                "\"billingAddress\":{\"companyName\":\"Kowalski Sp. z o.o.\",\"street\":\"Firmowa 5\","
+                        + "\"city\":\"Kraków\",\"postalCode\":\"30-001\",\"country\":\"Polska\"},\"paymentMethod\"");
+
+        mockMvc.perform(post("/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Validation failed: billingAddress.taxIdentificationNumber: must be provided together with companyName"));
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void placeOrder_TaxIdentificationNumberWithWrongChecksum_Returns400() throws Exception {
+        String body = VALID_BODY.formatted(UUID.randomUUID()).replace("\"paymentMethod\"",
+                "\"billingAddress\":{\"companyName\":\"Kowalski Sp. z o.o.\",\"taxIdentificationNumber\":\"5260250275\","
+                        + "\"street\":\"Firmowa 5\",\"city\":\"Kraków\",\"postalCode\":\"30-001\",\"country\":\"Polska\"},"
+                        + "\"paymentMethod\"");
+
+        mockMvc.perform(post("/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Validation failed: billingAddress.taxIdentificationNumber: must be 10 digits with a correct checksum"));
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
     void placeOrder_UnknownDeliveryMethod_Returns400() throws Exception {
         String body = VALID_BODY.formatted(UUID.randomUUID()).replace("COURIER", "DRONE");
 
@@ -147,16 +184,16 @@ class OrderControllerTest {
     }
 
     @Test
-    void placeOrder_CartAlreadyCheckedOut_Returns409() throws Exception {
+    void placeOrder_OrderAlreadyPlacedFromCart_Returns409() throws Exception {
         UUID cartId = UUID.randomUUID();
         when(orderService.placeOrder(any(PlaceOrderCommand.class)))
-                .thenThrow(new CartNotOrderableException(cartId, "Cart with id " + cartId + " is CHECKED_OUT"));
+                .thenThrow(new OrderAlreadyPlacedException(cartId, "ORD-2026-000001"));
 
         mockMvc.perform(post("/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY.formatted(cartId)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value(containsString("is CHECKED_OUT")));
+                .andExpect(jsonPath("$.message").value("Order ORD-2026-000001 has already been placed from cart " + cartId));
     }
 
     @Test

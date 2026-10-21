@@ -9,6 +9,8 @@ public interface OrderRepositoryPort {
 
     Optional<Order> findById(UUID id);
 
+    Optional<Order> findByCartId(UUID cartId);
+
     List<Order> findAll();
 
     List<Order> findAllByCustomerEmail(String email);

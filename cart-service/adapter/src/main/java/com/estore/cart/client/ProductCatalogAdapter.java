@@ -7,6 +7,7 @@ import com.estore.cart.ProductCatalogUnavailableException;
 import com.estore.cart.ProductDetails;
 import com.estore.cart.ProductNotFoundException;
 import com.estore.cart.VariantDetails;
+import com.estore.cart.VatRate;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,7 @@ public class ProductCatalogAdapter implements ProductCatalogPort {
                         .stockKeepingUnit(variant.stockKeepingUnit())
                         .price(money(variant.price()))
                         .availability(variant.availability())
+                        .vatRate(vatRate(variant.vatRate()))
                         .build())
                 .toList();
 
@@ -50,6 +52,7 @@ public class ProductCatalogAdapter implements ProductCatalogPort {
                         .productId(addOn.productId())
                         .name(addOn.name())
                         .price(money(addOn.price()))
+                        .vatRate(vatRate(addOn.vatRate()))
                         .build())
                 .toList();
 
@@ -59,6 +62,13 @@ public class ProductCatalogAdapter implements ProductCatalogPort {
                 .variants(variants)
                 .addOns(addOns)
                 .build();
+    }
+
+    private VatRate vatRate(String value) {
+        if (value == null) {
+            throw new IllegalStateException("Product service returned a price without a VAT rate");
+        }
+        return VatRate.valueOf(value);
     }
 
     private Money money(MoneyPayload payload) {

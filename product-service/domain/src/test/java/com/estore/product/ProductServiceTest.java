@@ -187,14 +187,14 @@ class ProductServiceTest {
     private AddOn addOn(UUID addOnProductId) {
         return AddOn.builder()
                 .productId(addOnProductId).name("Mysz")
-                .price(Money.of(new BigDecimal("99.00"), "PLN")).build();
+                .price(Money.of(new BigDecimal("99.00"), "PLN")).vatRate(VatRate.VAT_23).build();
     }
 
     private ProductVariant variant(UUID id, String stockKeepingUnit) {
         return ProductVariant.builder()
                 .id(id).stockKeepingUnit(stockKeepingUnit)
                 .price(Money.of(new BigDecimal("4599.00"), "PLN"))
-                .availability(Availability.AVAILABLE).build();
+                .availability(Availability.AVAILABLE).vatRate(VatRate.VAT_23).build();
     }
 
     @Test

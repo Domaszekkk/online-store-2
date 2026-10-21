@@ -17,6 +17,7 @@ public class CartItemDto {
     private String productName;
     private String stockKeepingUnit;
     private MoneyDto unitPrice;
+    private String vatRate;
     private int quantity;
     private List<CartItemAddOnDto> addOns;
     private MoneyDto lineTotal;

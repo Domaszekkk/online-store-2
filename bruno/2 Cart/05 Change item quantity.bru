@@ -1,0 +1,29 @@
+meta {
+  name: 05 Change item quantity
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{cartServiceUrl}}/carts/{{cartId}}/items/{{itemId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "quantity": 2
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Changes only the laptop quantity (3 -> 2); the cable quantity (2) stays as it is.
+}

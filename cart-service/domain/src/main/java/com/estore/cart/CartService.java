@@ -55,6 +55,9 @@ public class CartService {
 
     public Cart checkout(UUID cartId) {
         Cart cart = getCartById(cartId);
+        if (cart.isCheckedOut()) {
+            return cart;
+        }
         cart.checkout();
         return cartRepositoryPort.save(cart);
     }
@@ -76,6 +79,7 @@ public class CartService {
                     .productId(addOn.getProductId())
                     .name(addOn.getName())
                     .price(addOn.getPrice())
+                    .vatRate(addOn.getVatRate())
                     .quantity(quantity)
                     .build());
         });

@@ -1,6 +1,7 @@
 package com.estore.product.product;
 
 import com.estore.product.Availability;
+import com.estore.product.VatRate;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -40,4 +41,8 @@ public class ProductVariantEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "availability", length = 50)
     private Availability availability;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vat_rate", length = 20)
+    private VatRate vatRate;
 }

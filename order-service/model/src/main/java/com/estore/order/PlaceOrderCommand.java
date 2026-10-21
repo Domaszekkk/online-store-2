@@ -13,7 +13,7 @@ public class PlaceOrderCommand {
     private UUID cartId;
     private Customer customer;
     private Address shippingAddress;
-    private Address billingAddress;
+    private BillingAddress billingAddress;
     private PaymentMethod paymentMethod;
     private DeliveryMethod deliveryMethod;
 }

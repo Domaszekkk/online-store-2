@@ -17,6 +17,7 @@ public class CartItemDetails {
     private String productName;
     private String stockKeepingUnit;
     private Money unitPrice;
+    private VatRate vatRate;
     private int quantity;
 
     @Builder.Default

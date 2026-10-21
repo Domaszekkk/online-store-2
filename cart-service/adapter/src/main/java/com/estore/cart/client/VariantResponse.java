@@ -6,6 +6,7 @@ public record VariantResponse(
         UUID id,
         String stockKeepingUnit,
         MoneyPayload price,
-        String availability
+        String availability,
+        String vatRate
 ) {
 }

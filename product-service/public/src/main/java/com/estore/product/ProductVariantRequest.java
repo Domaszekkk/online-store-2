@@ -27,4 +27,7 @@ public class ProductVariantRequest {
 
     @NotNull
     private Availability availability;
+
+    @NotNull
+    private VatRate vatRate;
 }

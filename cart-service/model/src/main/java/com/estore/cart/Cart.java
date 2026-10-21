@@ -56,7 +56,14 @@ public class Cart {
         markChanged();
     }
 
+    public boolean isCheckedOut() {
+        return status == CartStatus.CHECKED_OUT;
+    }
+
     public void checkout() {
+        if (isCheckedOut()) {
+            return;
+        }
         requireActive();
         if (items.isEmpty()) {
             throw new EmptyCartException(id);

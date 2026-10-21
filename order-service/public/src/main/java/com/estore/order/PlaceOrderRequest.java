@@ -24,7 +24,7 @@ public class PlaceOrderRequest {
     private AddressRequest shippingAddress;
 
     @Valid
-    private AddressRequest billingAddress;
+    private BillingAddressRequest billingAddress;
 
     @NotNull
     private PaymentMethod paymentMethod;

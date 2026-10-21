@@ -1,0 +1,20 @@
+meta {
+  name: 02 Download invoice PDF
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{invoiceServiceUrl}}/documents/order/{{orderId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: eq application/pdf
+}
+
+docs {
+  PDF rendered once when the invoice was issued. Bruno shows a preview in the response pane.
+}

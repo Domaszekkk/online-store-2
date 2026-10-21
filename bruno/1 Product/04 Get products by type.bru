@@ -1,0 +1,19 @@
+meta {
+  name: 04 Get products by type
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{productServiceUrl}}/products?type=COMPUTER
+  body: none
+  auth: none
+}
+
+params:query {
+  type: COMPUTER
+}
+
+assert {
+  res.status: eq 200
+}

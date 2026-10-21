@@ -19,6 +19,7 @@ public class OrderLine {
     private String productName;
     private String stockKeepingUnit;
     private Money unitPrice;
+    private VatRate vatRate;
     private int quantity;
 
     @Builder.Default
@@ -33,6 +34,7 @@ public class OrderLine {
                         .productId(addOn.getProductId())
                         .name(addOn.getName())
                         .price(addOn.getPrice())
+                        .vatRate(addOn.getVatRate())
                         .quantity(addOn.getQuantity())
                         .build())
                 .collect(Collectors.toCollection(ArrayList::new));
@@ -43,6 +45,7 @@ public class OrderLine {
                 .productName(item.getProductName())
                 .stockKeepingUnit(item.getStockKeepingUnit())
                 .unitPrice(item.getUnitPrice())
+                .vatRate(item.getVatRate())
                 .quantity(item.getQuantity())
                 .addOns(addOns)
                 .build();

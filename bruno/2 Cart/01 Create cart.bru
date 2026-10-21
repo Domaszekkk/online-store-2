@@ -1,0 +1,22 @@
+meta {
+  name: 01 Create cart
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{cartServiceUrl}}/carts
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 201
+  res.body.status: eq ACTIVE
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("cartId", res.getBody().id);
+  }
+}

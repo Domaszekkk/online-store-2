@@ -1,5 +1,6 @@
 package com.estore.cart.cart;
 
+import com.estore.cart.VatRate;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -37,6 +38,10 @@ public class CartItemEntity {
             @AttributeOverride(name = "currency", column = @Column(name = "unit_price_currency", length = 3))
     })
     private MoneyEmbeddable unitPrice;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vat_rate", length = 20)
+    private VatRate vatRate;
 
     @Column(name = "quantity")
     private int quantity;

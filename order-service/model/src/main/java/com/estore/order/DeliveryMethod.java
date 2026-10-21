@@ -16,4 +16,8 @@ public enum DeliveryMethod {
     public Money cost() {
         return Money.of(costInPolishZloty, Order.CURRENCY);
     }
+
+    public VatRate vatRate() {
+        return VatRate.VAT_23;
+    }
 }

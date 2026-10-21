@@ -1,0 +1,16 @@
+meta {
+  name: 05 Get product by id
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{productServiceUrl}}/products/{{productId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.name: eq ProBook X15
+}

@@ -16,4 +16,5 @@ public class ProductVariantDto {
     private Map<String, String> optionValues;
     private MoneyDto price;
     private String availability;
+    private String vatRate;
 }

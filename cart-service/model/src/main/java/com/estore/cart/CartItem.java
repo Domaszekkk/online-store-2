@@ -20,6 +20,7 @@ public class CartItem {
     private String productName;
     private String stockKeepingUnit;
     private Money unitPrice;
+    private VatRate vatRate;
     private int quantity;
 
     @Builder.Default
@@ -40,6 +41,7 @@ public class CartItem {
                 .productName(productName)
                 .stockKeepingUnit(variant.getStockKeepingUnit())
                 .unitPrice(variant.getPrice())
+                .vatRate(variant.getVatRate())
                 .quantity(quantity)
                 .addOns(addOns)
                 .build();

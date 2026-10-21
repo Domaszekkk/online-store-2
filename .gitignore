@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Helper documents (not part of the project) ###
+handoff.md
+MODEL-DANYCH.md

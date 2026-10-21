@@ -13,6 +13,7 @@ public class OrderLineAddOn {
     private UUID productId;
     private String name;
     private Money price;
+    private VatRate vatRate;
     private int quantity;
 
     public Money total() {

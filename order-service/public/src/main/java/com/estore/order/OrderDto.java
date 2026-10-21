@@ -18,7 +18,7 @@ public class OrderDto {
     private String status;
     private CustomerDto customer;
     private AddressDto shippingAddress;
-    private AddressDto billingAddress;
+    private BillingAddressDto billingAddress;
     private String paymentMethod;
     private String deliveryMethod;
     private List<OrderLineDto> lines;

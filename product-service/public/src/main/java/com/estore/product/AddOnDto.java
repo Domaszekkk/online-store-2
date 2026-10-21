@@ -13,4 +13,5 @@ public class AddOnDto {
     private UUID productId;
     private String name;
     private MoneyDto price;
+    private String vatRate;
 }

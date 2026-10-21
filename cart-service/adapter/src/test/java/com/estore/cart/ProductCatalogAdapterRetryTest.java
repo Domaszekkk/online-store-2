@@ -35,6 +35,8 @@ class ProductCatalogAdapterRetryTest {
     private static final UUID FLAKY_PRODUCT_ID = UUID.randomUUID();
     private static final UUID UNAVAILABLE_PRODUCT_ID = UUID.randomUUID();
     private static final UUID MISSING_PRODUCT_ID = UUID.randomUUID();
+    private static final UUID VARIANT_ID = UUID.randomUUID();
+    private static final UUID ADD_ON_PRODUCT_ID = UUID.randomUUID();
     private static final Map<String, AtomicInteger> CALLS_PER_PATH = new ConcurrentHashMap<>();
     private static final HttpServer PRODUCT_SERVICE_STUB = startProductServiceStub();
 
@@ -76,8 +78,12 @@ class ProductCatalogAdapterRetryTest {
             respond(exchange, 503, "{\"message\":\"temporarily down\"}");
         } else {
             respond(exchange, 200, """
-                    {"id":"%s","name":"ProBook X15","variants":[],"addOns":[]}
-                    """.formatted(productId));
+                    {"id":"%s","name":"ProBook X15",
+                     "variants":[{"id":"%s","stockKeepingUnit":"PBX15-I7-16","price":{"amount":4599.00,"currency":"PLN"},
+                                  "availability":"AVAILABLE","vatRate":"VAT_23"}],
+                     "addOns":[{"productId":"%s","name":"Kabel HDMI 2m","price":{"amount":39.00,"currency":"PLN"},
+                                "vatRate":"VAT_8"}]}
+                    """.formatted(productId, VARIANT_ID, ADD_ON_PRODUCT_ID));
         }
     }
 
@@ -123,5 +129,15 @@ class ProductCatalogAdapterRetryTest {
                 () -> productCatalogPort.getProduct(MISSING_PRODUCT_ID));
 
         assertEquals(1, callsFor(MISSING_PRODUCT_ID));
+    }
+
+    @Test
+    void getProduct_DataCorrect_MapsVatRatesOfVariantAndAddOn() {
+        ProductDetails result = productCatalogPort.getProduct(UUID.randomUUID());
+
+        assertAll(
+                () -> assertEquals(VatRate.VAT_23, result.findVariant(VARIANT_ID).orElseThrow().getVatRate()),
+                () -> assertEquals(VatRate.VAT_8, result.findAddOn(ADD_ON_PRODUCT_ID).orElseThrow().getVatRate())
+        );
     }
 }

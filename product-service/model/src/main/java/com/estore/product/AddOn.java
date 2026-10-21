@@ -13,4 +13,5 @@ public class AddOn {
     private UUID productId;
     private String name;
     private Money price;
+    private VatRate vatRate;
 }

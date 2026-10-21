@@ -17,6 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class CartServiceTest {
@@ -45,7 +47,7 @@ class CartServiceTest {
                 .variants(List.of(VariantDetails.builder()
                         .id(variantId).stockKeepingUnit("PBX15-I7-16")
                         .price(Money.of(new BigDecimal("4599.00"), "PLN"))
-                        .availability(availability).build()))
+                        .availability(availability).vatRate(VatRate.VAT_23).build()))
                 .build();
     }
 
@@ -131,7 +133,7 @@ class CartServiceTest {
         ProductDetails product = product(productId, variantId, "AVAILABLE");
         product.setAddOns(List.of(AddOnDetails.builder()
                 .productId(addOnProductId).name("Laptop bag")
-                .price(Money.of(new BigDecimal("199.00"), "PLN")).build()));
+                .price(Money.of(new BigDecimal("199.00"), "PLN")).vatRate(VatRate.VAT_8).build()));
         return product;
     }
 
@@ -139,7 +141,7 @@ class CartServiceTest {
         Cart cart = emptyCart(cartId);
         CartItem item = CartItem.create(UUID.randomUUID(), "ProBook X15",
                 VariantDetails.builder().id(UUID.randomUUID()).stockKeepingUnit("PBX15-I7-16")
-                        .price(Money.of(new BigDecimal("4599.00"), "PLN")).availability("AVAILABLE").build(),
+                        .price(Money.of(new BigDecimal("4599.00"), "PLN")).availability("AVAILABLE").vatRate(VatRate.VAT_23).build(),
                 quantity, List.of());
         item.setId(itemId);
         cart.addItem(item);
@@ -211,7 +213,9 @@ class CartServiceTest {
                 () -> assertEquals(2, item.getQuantity()),
                 () -> assertEquals(1, item.getAddOns().get(0).getQuantity()),
                 () -> assertAmount("9397.00", item.getLineTotal()),
-                () -> assertAmount("9397.00", result.getTotal())
+                () -> assertAmount("9397.00", result.getTotal()),
+                () -> assertEquals(VatRate.VAT_23, item.getVatRate()),
+                () -> assertEquals(VatRate.VAT_8, item.getAddOns().get(0).getVatRate())
         );
     }
 
@@ -421,14 +425,34 @@ class CartServiceTest {
     }
 
     @Test
-    void checkout_CartAlreadyCheckedOut_ThrowsCartNotActiveException() {
+    void checkout_CartAlreadyCheckedOut_ReturnsSameContentWithoutSaving() {
         UUID cartId = UUID.randomUUID();
-        Cart checkedOutCart = emptyCart(cartId);
-        checkedOutCart.setStatus(CartStatus.CHECKED_OUT);
+        Cart checkedOutCart = cartWithItem(cartId, UUID.randomUUID(), 2);
+        checkedOutCart.checkout();
+        Instant checkedOutAt = checkedOutCart.getUpdatedAt();
         when(cartRepositoryPort.findById(cartId)).thenReturn(Optional.of(checkedOutCart));
 
-        CartNotActiveException exception = Assertions.assertThrows(
-                CartNotActiveException.class, () -> cartService.checkout(cartId));
+        Cart result = cartService.checkout(cartId);
+
+        assertAll(
+                () -> assertEquals(CartStatus.CHECKED_OUT, result.getStatus()),
+                () -> assertEquals(1, result.getItems().size()),
+                () -> assertEquals(2, result.getItems().get(0).getQuantity()),
+                () -> assertEquals(checkedOutAt, result.getUpdatedAt())
+        );
+        verify(cartRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void changeItemQuantity_CartAlreadyCheckedOut_ThrowsCartNotActiveException() {
+        UUID cartId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        Cart checkedOutCart = cartWithItem(cartId, itemId, 1);
+        checkedOutCart.checkout();
+        when(cartRepositoryPort.findById(cartId)).thenReturn(Optional.of(checkedOutCart));
+
+        CartNotActiveException exception = Assertions.assertThrows(CartNotActiveException.class,
+                () -> cartService.changeItemQuantity(cartId, itemId, new ChangeItemQuantityCommand(3)));
 
         assertEquals(409, exception.getResponseCode());
     }

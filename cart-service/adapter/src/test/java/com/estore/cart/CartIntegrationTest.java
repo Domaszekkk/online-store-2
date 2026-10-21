@@ -46,7 +46,7 @@ class CartIntegrationTest {
                 .variants(List.of(VariantDetails.builder()
                         .id(variantId).stockKeepingUnit("PBX15-I7-16")
                         .price(Money.of(new BigDecimal("4599.00"), "PLN"))
-                        .availability(availability).build()))
+                        .availability(availability).vatRate(VatRate.VAT_23).build()))
                 .build();
     }
 
@@ -139,7 +139,7 @@ class CartIntegrationTest {
         ProductDetails laptop = product(productId, variantId, "AVAILABLE");
         laptop.setAddOns(List.of(AddOnDetails.builder()
                 .productId(cableId).name("Kabel HDMI 2m")
-                .price(Money.of(new BigDecimal("39.00"), "PLN")).build()));
+                .price(Money.of(new BigDecimal("39.00"), "PLN")).vatRate(VatRate.VAT_8).build()));
         when(productCatalogPort.getProduct(productId)).thenReturn(laptop);
         String body = """
                 {"productId":"%s","variantId":"%s","quantity":2,
@@ -152,6 +152,8 @@ class CartIntegrationTest {
         mockMvc.perform(get("/carts/{id}", cartId))
                 .andExpect(jsonPath("$.items[0].quantity").value(2))
                 .andExpect(jsonPath("$.items[0].addOns[0].quantity").value(1))
+                .andExpect(jsonPath("$.items[0].vatRate").value("VAT_23"))
+                .andExpect(jsonPath("$.items[0].addOns[0].vatRate").value("VAT_8"))
                 .andExpect(jsonPath("$.items[0].lineTotal.amount").value(9237.00))
                 .andExpect(jsonPath("$.total.amount").value(9237.00));
     }
@@ -168,7 +170,7 @@ class CartIntegrationTest {
     }
 
     @Test
-    void checkout_thenModifyOrCheckoutAgain_Returns409() throws Exception {
+    void checkout_thenModifyReturns409AndCheckoutAgainReturnsSameContent() throws Exception {
         String cartId = createCart();
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
@@ -190,6 +192,9 @@ class CartIntegrationTest {
         mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isConflict());
         mockMvc.perform(post("/carts/{id}/checkout", cartId))
-                .andExpect(status().isConflict());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CHECKED_OUT"))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].quantity").value(1));
     }
 }

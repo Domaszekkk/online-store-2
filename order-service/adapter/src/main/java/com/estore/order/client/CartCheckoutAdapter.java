@@ -8,6 +8,7 @@ import com.estore.order.CartNotFoundException;
 import com.estore.order.CartNotOrderableException;
 import com.estore.order.CartServiceUnavailableException;
 import com.estore.order.Money;
+import com.estore.order.VatRate;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +60,7 @@ public class CartCheckoutAdapter implements CartCheckoutPort {
                         .productName(item.productName())
                         .stockKeepingUnit(item.stockKeepingUnit())
                         .unitPrice(money(item.unitPrice()))
+                        .vatRate(vatRate(item.vatRate()))
                         .quantity(item.quantity())
                         .addOns((item.addOns() == null ? List.<CartItemAddOnResponse>of() : item.addOns())
                                 .stream()
@@ -66,6 +68,7 @@ public class CartCheckoutAdapter implements CartCheckoutPort {
                                         .productId(addOn.productId())
                                         .name(addOn.name())
                                         .price(money(addOn.price()))
+                                        .vatRate(vatRate(addOn.vatRate()))
                                         .quantity(addOn.quantity())
                                         .build())
                                 .toList())
@@ -75,6 +78,13 @@ public class CartCheckoutAdapter implements CartCheckoutPort {
                 .id(response.id())
                 .items(items)
                 .build();
+    }
+
+    private VatRate vatRate(String value) {
+        if (value == null) {
+            throw new IllegalStateException("Cart service returned a price without a VAT rate");
+        }
+        return VatRate.valueOf(value);
     }
 
     private Money money(MoneyPayload payload) {

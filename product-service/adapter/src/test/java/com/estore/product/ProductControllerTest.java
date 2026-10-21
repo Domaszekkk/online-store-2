@@ -53,11 +53,13 @@ class ProductControllerTest {
                         .optionValues(Map.of("Procesor", "i7"))
                         .price(Money.of(new BigDecimal("4599.00"), "PLN"))
                         .availability(Availability.AVAILABLE)
+                        .vatRate(VatRate.VAT_23)
                         .build()))
                 .addOns(List.of(AddOn.builder()
                         .productId(UUID.randomUUID())
                         .name("Mysz")
                         .price(Money.of(new BigDecimal("99.00"), "PLN"))
+                        .vatRate(VatRate.VAT_8)
                         .build()))
                 .build();
     }
@@ -80,7 +82,9 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.type").value("COMPUTER"))
                 .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value("PBX15-I7-16"))
                 .andExpect(jsonPath("$.variants[0].availability").value("AVAILABLE"))
-                .andExpect(jsonPath("$.addOns[0].name").value("Mysz"));
+                .andExpect(jsonPath("$.variants[0].vatRate").value("VAT_23"))
+                .andExpect(jsonPath("$.addOns[0].name").value("Mysz"))
+                .andExpect(jsonPath("$.addOns[0].vatRate").value("VAT_8"));
     }
 
     @Test
@@ -206,7 +210,8 @@ class ProductControllerTest {
                         org.hamcrest.Matchers.containsString("basePrice.amount"),
                         org.hamcrest.Matchers.containsString("basePrice.currency"),
                         org.hamcrest.Matchers.containsString("variants[0].stockKeepingUnit"),
-                        org.hamcrest.Matchers.containsString("variants[0].availability"))));
+                        org.hamcrest.Matchers.containsString("variants[0].availability"),
+                        org.hamcrest.Matchers.containsString("variants[0].vatRate"))));
         org.mockito.Mockito.verifyNoInteractions(productService);
     }
 
