@@ -18,7 +18,7 @@ public class OrderPlacedEventFactory {
                 order.getId(),
                 order.getOrderNumber(),
                 order.getCreatedAt(),
-                new OrderPlacedEvent.Customer(
+                new CustomerPayload(
                         order.getCustomer().getFirstName(),
                         order.getCustomer().getLastName(),
                         order.getCustomer().getEmail(),
@@ -33,11 +33,11 @@ public class OrderPlacedEventFactory {
                 money(order.getGrandTotal()));
     }
 
-    private OrderPlacedEvent.BillingAddress billingAddress(BillingAddress billingAddress) {
+    private BillingAddressPayload billingAddress(BillingAddress billingAddress) {
         if (billingAddress == null) {
             return null;
         }
-        return new OrderPlacedEvent.BillingAddress(
+        return new BillingAddressPayload(
                 billingAddress.getCompanyName(),
                 billingAddress.getTaxIdentificationNumber(),
                 billingAddress.getStreet(),
@@ -46,8 +46,8 @@ public class OrderPlacedEventFactory {
                 billingAddress.getCountry());
     }
 
-    private OrderPlacedEvent.Line line(OrderLine line) {
-        return new OrderPlacedEvent.Line(
+    private OrderLinePayload line(OrderLine line) {
+        return new OrderLinePayload(
                 line.getProductId(),
                 line.getVariantId(),
                 line.getProductName(),
@@ -59,8 +59,8 @@ public class OrderPlacedEventFactory {
                 money(line.getLineTotal()));
     }
 
-    private OrderPlacedEvent.AddOn addOn(OrderLineAddOn addOn) {
-        return new OrderPlacedEvent.AddOn(
+    private AddOnPayload addOn(OrderLineAddOn addOn) {
+        return new AddOnPayload(
                 addOn.getProductId(),
                 addOn.getName(),
                 money(addOn.getPrice()),
@@ -68,7 +68,7 @@ public class OrderPlacedEventFactory {
                 addOn.getQuantity());
     }
 
-    private OrderPlacedEvent.Money money(Money money) {
-        return new OrderPlacedEvent.Money(money.amount(), money.currency());
+    private MoneyPayload money(Money money) {
+        return new MoneyPayload(money.amount(), money.currency());
     }
 }

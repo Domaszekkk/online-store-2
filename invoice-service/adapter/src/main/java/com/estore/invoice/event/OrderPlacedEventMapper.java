@@ -33,7 +33,7 @@ public class OrderPlacedEventMapper {
                 .build();
     }
 
-    private OrderBillingAddress billingAddress(OrderPlacedEvent.BillingAddress billingAddress) {
+    private OrderBillingAddress billingAddress(BillingAddressPayload billingAddress) {
         if (billingAddress == null) {
             return null;
         }
@@ -47,8 +47,8 @@ public class OrderPlacedEventMapper {
                 .build();
     }
 
-    private OrderedLine line(OrderPlacedEvent.Line line) {
-        List<OrderPlacedEvent.AddOn> addOns = line.addOns() == null ? List.of() : line.addOns();
+    private OrderedLine line(OrderLinePayload line) {
+        List<AddOnPayload> addOns = line.addOns() == null ? List.of() : line.addOns();
         return OrderedLine.builder()
                 .productName(line.productName())
                 .stockKeepingUnit(line.stockKeepingUnit())
@@ -59,7 +59,7 @@ public class OrderPlacedEventMapper {
                 .build();
     }
 
-    private OrderedAddOn addOn(OrderPlacedEvent.AddOn addOn) {
+    private OrderedAddOn addOn(AddOnPayload addOn) {
         return OrderedAddOn.builder()
                 .name(addOn.name())
                 .price(money(addOn.price()))
@@ -68,7 +68,7 @@ public class OrderPlacedEventMapper {
                 .build();
     }
 
-    private Money money(OrderPlacedEvent.Money money) {
+    private Money money(MoneyPayload money) {
         return Money.of(money.amount(), money.currency());
     }
 }

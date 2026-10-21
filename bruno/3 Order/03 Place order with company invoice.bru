@@ -33,7 +33,7 @@ assert {
   res.status: eq 201
   res.body.status: eq NEW
   res.body.grandTotal.amount: eq 9295.99
-  res.body.billingAddress.taxIdentificationNumber: eq 5260250274
+  res.body.billingAddress.taxIdentificationNumber: eq "5260250274"
 }
 
 script:post-response {
