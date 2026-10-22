@@ -1,0 +1,26 @@
+meta {
+  name: 09 Download document right after the order (202)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{gatewayUrl}}/shop/orders/{{gatewayOrderId}}/document
+  body: none
+  auth: none
+}
+
+tests {
+  test("document is being prepared (202 with Retry-After) or already issued (200)", function () {
+    expect([200, 202]).to.include(res.getStatus());
+    if (res.getStatus() === 202) {
+      expect(res.getHeader("retry-after")).to.equal("2");
+      expect(res.getBody().message).to.contain("is being prepared");
+    }
+  });
+}
+
+docs {
+  Sent right after the order: the invoice is issued asynchronously (outbox, Kafka, invoice-service),
+  so the gateway usually answers 202 Accepted with Retry-After: 2 instead of 404.
+}

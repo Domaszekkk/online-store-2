@@ -1,0 +1,25 @@
+meta {
+  name: 06 Get checkout options
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{gatewayUrl}}/shop/checkout-options
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.paymentMethods.length: eq 4
+  res.body.deliveryMethods.length: eq 3
+  res.body.deliveryMethods[0].method: eq COURIER
+  res.body.deliveryMethods[0].cost.amount: eq 19.99
+  res.body.deliveryMethods[1].cost.amount: eq 12.99
+  res.body.deliveryMethods[2].cost.amount: eq 0
+}
+
+docs {
+  Screen 2: payment methods and delivery methods with gross cost, both taken from order-service.
+}

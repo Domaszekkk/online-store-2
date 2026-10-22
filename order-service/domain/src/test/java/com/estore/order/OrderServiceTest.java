@@ -275,4 +275,23 @@ class OrderServiceTest {
 
         assertEquals(orders, orderService.getOrders(" jan.kowalski@example.com "));
     }
+
+    @Test
+    void getDeliveryMethods_ReturnsAllMethodsWithCosts() {
+        List<DeliveryMethod> deliveryMethods = orderService.getDeliveryMethods();
+
+        assertAll(
+                () -> assertEquals(List.of(DeliveryMethod.COURIER, DeliveryMethod.PARCEL_LOCKER, DeliveryMethod.PICKUP),
+                        deliveryMethods),
+                () -> assertAmount("19.99", deliveryMethods.get(0).cost()),
+                () -> assertAmount("12.99", deliveryMethods.get(1).cost()),
+                () -> assertAmount("0.00", deliveryMethods.get(2).cost())
+        );
+    }
+
+    @Test
+    void getPaymentMethods_ReturnsAllMethods() {
+        assertEquals(List.of(PaymentMethod.CARD, PaymentMethod.BLIK, PaymentMethod.TRANSFER, PaymentMethod.CASH_ON_DELIVERY),
+                orderService.getPaymentMethods());
+    }
 }

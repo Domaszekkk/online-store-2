@@ -40,4 +40,12 @@ public class OrderService {
         }
         return orderRepositoryPort.findAllByCustomerEmail(customerEmail.trim());
     }
+
+    public List<DeliveryMethod> getDeliveryMethods() {
+        return List.of(DeliveryMethod.values());
+    }
+
+    public List<PaymentMethod> getPaymentMethods() {
+        return List.of(PaymentMethod.values());
+    }
 }

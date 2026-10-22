@@ -1,5 +1,6 @@
 package com.estore.order.order;
 
+import com.estore.order.DeliveryMethodDto;
 import com.estore.order.OrderDto;
 import com.estore.order.OrderService;
 import com.estore.order.PlaceOrderRequest;
@@ -58,5 +59,23 @@ public class OrderController {
     public List<OrderDto> getOrders(@Parameter(description = "Customer email to filter by (optional)")
                                     @RequestParam(required = false) String email) {
         return orderMapper.toDtos(orderService.getOrders(email));
+    }
+
+    @Operation(summary = "Get delivery methods", description = "Returns the available delivery methods with their gross cost")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Delivery methods returned")
+    })
+    @GetMapping("/delivery-methods")
+    public List<DeliveryMethodDto> getDeliveryMethods() {
+        return orderMapper.toDeliveryMethodDtos(orderService.getDeliveryMethods());
+    }
+
+    @Operation(summary = "Get payment methods", description = "Returns the names of the available payment methods")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Payment methods returned")
+    })
+    @GetMapping("/payment-methods")
+    public List<String> getPaymentMethods() {
+        return orderMapper.toPaymentMethodNames(orderService.getPaymentMethods());
     }
 }

@@ -259,4 +259,32 @@ class OrderControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
     }
+
+    @Test
+    void getDeliveryMethods_Returns200WithCosts() throws Exception {
+        when(orderService.getDeliveryMethods())
+                .thenReturn(List.of(DeliveryMethod.COURIER, DeliveryMethod.PARCEL_LOCKER, DeliveryMethod.PICKUP));
+
+        mockMvc.perform(get("/orders/delivery-methods"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].method").value("COURIER"))
+                .andExpect(jsonPath("$[0].cost.amount").value(19.99))
+                .andExpect(jsonPath("$[0].cost.currency").value("PLN"))
+                .andExpect(jsonPath("$[1].method").value("PARCEL_LOCKER"))
+                .andExpect(jsonPath("$[1].cost.amount").value(12.99))
+                .andExpect(jsonPath("$[2].method").value("PICKUP"))
+                .andExpect(jsonPath("$[2].cost.amount").value(0.00));
+    }
+
+    @Test
+    void getPaymentMethods_Returns200WithNames() throws Exception {
+        when(orderService.getPaymentMethods()).thenReturn(List.of(PaymentMethod.CARD, PaymentMethod.BLIK));
+
+        mockMvc.perform(get("/orders/payment-methods"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0]").value("CARD"))
+                .andExpect(jsonPath("$[1]").value("BLIK"));
+    }
 }
