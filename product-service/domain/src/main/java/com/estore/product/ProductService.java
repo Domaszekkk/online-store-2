@@ -2,12 +2,19 @@ package com.estore.product;
 
 import lombok.RequiredArgsConstructor;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.Period;
 import java.util.List;
 import java.util.UUID;
 
 @RequiredArgsConstructor
 public class ProductService {
     private final ProductRepositoryPort productRepositoryPort;
+    private final TransactionPort transactionPort;
+    private final Clock clock;
+    private final Period archiveRetentionPeriod;
 
     public Product addProduct(AddProductCommand command) {
         Product product = Product.from(command);
@@ -17,12 +24,22 @@ public class ProductService {
 
     public Product getProductById(UUID id) {
         return productRepositoryPort
-                .findById(id)
+                .findActiveById(id)
                 .orElseThrow(() -> new ProductNotFoundException(id));
     }
 
     public List<Product> getProducts(ProductType type) {
-        return productRepositoryPort.findAll(type);
+        return productRepositoryPort.findAllActive(type);
+    }
+
+    public Product getArchivedProductById(UUID id) {
+        return productRepositoryPort
+                .findArchivedById(id)
+                .orElseThrow(() -> new ProductNotFoundException(id));
+    }
+
+    public List<Product> getArchivedProducts() {
+        return productRepositoryPort.findAllArchived();
     }
 
     public List<ProductOption> getProductConfiguration(UUID id) {
@@ -38,11 +55,18 @@ public class ProductService {
         return productRepositoryPort.save(product);
     }
 
-    public void deleteProduct(UUID id) {
-        if (!productRepositoryPort.existsById(id)) {
-            throw new ProductNotFoundException(id);
-        }
-        productRepositoryPort.deleteById(id);
+    public void archiveProduct(UUID id) {
+        transactionPort.inTransaction(() -> {
+            Product product = getProductById(id);
+            product.archive(clock.instant());
+            productRepositoryPort.removeAddOnsReferencing(id);
+            return productRepositoryPort.save(product);
+        });
+    }
+
+    public long deleteExpiredArchivedProducts() {
+        Instant cutoff = OffsetDateTime.now(clock).minus(archiveRetentionPeriod).toInstant();
+        return productRepositoryPort.deleteArchivedBefore(cutoff);
     }
 
     private void validateAddOns(UUID productId, List<AddOn> addOns) {
@@ -54,7 +78,7 @@ public class ProductService {
             if (addOnProductId.equals(productId)) {
                 throw InvalidAddOnException.selfReference(productId);
             }
-            if (!productRepositoryPort.existsById(addOnProductId)) {
+            if (!productRepositoryPort.existsActiveById(addOnProductId)) {
                 throw InvalidAddOnException.productNotFound(addOnProductId);
             }
         }

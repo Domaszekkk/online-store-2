@@ -10,6 +10,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,6 +31,8 @@ class ProductIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @Autowired
+    private ProductRepositoryPort productRepositoryPort;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private AddProductCommand accessoryCommand() {
@@ -172,7 +176,7 @@ class ProductIntegrationTest {
     }
 
     @Test
-    void deleteProduct_RemovesProduct() throws Exception {
+    void deleteProduct_ArchivesProductAndHidesItFromSale() throws Exception {
         String id = createProduct(sampleLaptopCommand());
 
         mockMvc.perform(delete("/products/{id}", id))
@@ -180,6 +184,84 @@ class ProductIntegrationTest {
 
         mockMvc.perform(get("/products/{id}", id))
                 .andExpect(status().isNotFound());
+        mockMvc.perform(get("/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id=='" + id + "')]").doesNotExist());
+        mockMvc.perform(put("/products/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"ProBook X15\",\"type\":\"COMPUTER\",\"basePrice\":{\"amount\":3999.00,\"currency\":\"PLN\"}}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/products/{id}", id))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/products/archived/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("ProBook X15"))
+                .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value("PBX15-I7-16"))
+                .andExpect(jsonPath("$.archivedAt").exists());
+        mockMvc.perform(get("/products/archived"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id=='" + id + "')]").exists());
+    }
+
+    @Test
+    void getArchivedProductById_ProductOnSale_Returns404() throws Exception {
+        String id = createProduct(accessoryCommand());
+
+        mockMvc.perform(get("/products/archived/{id}", id))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deleteProduct_ProductIsAddOnOfAnotherProduct_RemovesItFromThatProductAddOns() throws Exception {
+        String laptopId = createProduct(sampleLaptopCommand());
+        String accessoryId = objectMapper.readTree(
+                        mockMvc.perform(get("/products/{id}", laptopId)).andReturn().getResponse().getContentAsString())
+                .get("addOns").get(0).get("productId").asText();
+
+        mockMvc.perform(delete("/products/{id}", accessoryId))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/products/{id}", laptopId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.addOns.length()").value(0));
+    }
+
+    @Test
+    void addProduct_AddOnProductArchived_Returns400() throws Exception {
+        String accessoryId = createProduct(accessoryCommand());
+        mockMvc.perform(delete("/products/{id}", accessoryId))
+                .andExpect(status().isNoContent());
+        String body = """
+                {"name":"ProBook X15","type":"COMPUTER","basePrice":{"amount":3999.00,"currency":"PLN"},
+                 "addOns":[{"productId":"%s","name":"Mysz","price":{"amount":99.00,"currency":"PLN"},"vatRate":"VAT_23"}]}
+                """.formatted(accessoryId);
+
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Add-on product with id " + accessoryId + " does not exist"));
+    }
+
+    @Test
+    void deleteArchivedBefore_DeletesOnlyProductsArchivedBeforeCutoff() throws Exception {
+        String archivedId = createProduct(sampleLaptopCommand());
+        String activeId = createProduct(accessoryCommand());
+        mockMvc.perform(delete("/products/{id}", archivedId))
+                .andExpect(status().isNoContent());
+
+        productRepositoryPort.deleteArchivedBefore(Instant.now().minus(1, ChronoUnit.HOURS));
+
+        mockMvc.perform(get("/products/archived/{id}", archivedId))
+                .andExpect(status().isOk());
+
+        productRepositoryPort.deleteArchivedBefore(Instant.now().plus(1, ChronoUnit.HOURS));
+
+        mockMvc.perform(get("/products/archived/{id}", archivedId))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/products/{id}", activeId))
+                .andExpect(status().isOk());
     }
 
     @Test

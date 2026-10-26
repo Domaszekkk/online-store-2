@@ -5,7 +5,9 @@ import com.estore.product.ProductRepositoryPort;
 import com.estore.product.ProductType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,25 +24,42 @@ public class ProductRepositoryAdapter implements ProductRepositoryPort {
     }
 
     @Override
-    public Optional<Product> findById(UUID id) {
-        return productJpaRepository.findById(id).map(productMapper::toModel);
+    public Optional<Product> findActiveById(UUID id) {
+        return productJpaRepository.findByIdAndArchivedAtIsNull(id).map(productMapper::toModel);
     }
 
     @Override
-    public List<Product> findAll(ProductType type) {
+    public List<Product> findAllActive(ProductType type) {
         List<ProductEntity> entities = (type == null)
-                ? productJpaRepository.findAll()
-                : productJpaRepository.findByType(type);
+                ? productJpaRepository.findByArchivedAtIsNull()
+                : productJpaRepository.findByTypeAndArchivedAtIsNull(type);
         return entities.stream().map(productMapper::toModel).toList();
     }
 
     @Override
-    public boolean existsById(UUID id) {
-        return productJpaRepository.existsById(id);
+    public boolean existsActiveById(UUID id) {
+        return productJpaRepository.existsByIdAndArchivedAtIsNull(id);
     }
 
     @Override
-    public void deleteById(UUID id) {
-        productJpaRepository.deleteById(id);
+    public Optional<Product> findArchivedById(UUID id) {
+        return productJpaRepository.findByIdAndArchivedAtIsNotNull(id).map(productMapper::toModel);
+    }
+
+    @Override
+    public List<Product> findAllArchived() {
+        return productJpaRepository.findByArchivedAtIsNotNull().stream().map(productMapper::toModel).toList();
+    }
+
+    @Override
+    @Transactional
+    public void removeAddOnsReferencing(UUID productId) {
+        productJpaRepository.deleteAddOnsReferencing(productId);
+    }
+
+    @Override
+    @Transactional
+    public long deleteArchivedBefore(Instant cutoff) {
+        return productJpaRepository.deleteByArchivedAtBefore(cutoff);
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -119,6 +120,42 @@ class ProductControllerTest {
     }
 
     @Test
+    void getArchivedProducts_Returns200WithArchiveDate() throws Exception {
+        Product product = sampleProduct(UUID.randomUUID());
+        product.archive(Instant.parse("2026-10-22T10:00:00Z"));
+        when(productService.getArchivedProducts()).thenReturn(List.of(product));
+
+        mockMvc.perform(get("/products/archived"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("ProBook X15"))
+                .andExpect(jsonPath("$[0].archivedAt").value("2026-10-22T10:00:00Z"));
+    }
+
+    @Test
+    void getArchivedProductById_DataCorrect_Returns200() throws Exception {
+        UUID id = UUID.randomUUID();
+        Product product = sampleProduct(id);
+        product.archive(Instant.parse("2026-10-22T10:00:00Z"));
+        when(productService.getArchivedProductById(id)).thenReturn(product);
+
+        mockMvc.perform(get("/products/archived/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.archivedAt").value("2026-10-22T10:00:00Z"));
+    }
+
+    @Test
+    void getArchivedProductById_ProductNotArchived_Returns404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(productService.getArchivedProductById(id)).thenThrow(new ProductNotFoundException(id));
+
+        mockMvc.perform(get("/products/archived/{id}", id))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Product with id " + id + " not found"));
+    }
+
+    @Test
     void getProductConfiguration_Returns200() throws Exception {
         UUID id = UUID.randomUUID();
         when(productService.getProductConfiguration(id)).thenReturn(
@@ -147,20 +184,20 @@ class ProductControllerTest {
     }
 
     @Test
-    void deleteProduct_DataCorrect_Returns204() throws Exception {
+    void deleteProduct_DataCorrect_ArchivesProductAndReturns204() throws Exception {
         UUID id = UUID.randomUUID();
-        doNothing().when(productService).deleteProduct(id);
+        doNothing().when(productService).archiveProduct(id);
 
         mockMvc.perform(delete("/products/{id}", id))
                 .andExpect(status().isNoContent());
 
-        verify(productService).deleteProduct(id);
+        verify(productService).archiveProduct(id);
     }
 
     @Test
     void deleteProduct_ProductNotFound_Returns404() throws Exception {
         UUID id = UUID.randomUUID();
-        doThrow(new ProductNotFoundException(id)).when(productService).deleteProduct(id);
+        doThrow(new ProductNotFoundException(id)).when(productService).archiveProduct(id);
 
         mockMvc.perform(delete("/products/{id}", id))
                 .andExpect(status().isNotFound())

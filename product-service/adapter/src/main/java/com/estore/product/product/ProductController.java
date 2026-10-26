@@ -35,6 +35,25 @@ public class ProductController {
         return productMapper.toDtos(productService.getProducts(type));
     }
 
+    @Operation(summary = "Get archived products",
+            description = "Returns products withdrawn from sale that are still kept for the retention period")
+    @GetMapping("/archived")
+    public List<ProductDto> getArchivedProducts() {
+        return productMapper.toDtos(productService.getArchivedProducts());
+    }
+
+    @Operation(summary = "Get archived product by id",
+            description = "Returns a single product withdrawn from sale, together with the date it was archived")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Archived product found"),
+            @ApiResponse(responseCode = "404", description = "Archived product not found")
+    })
+    @GetMapping("/archived/{id}")
+    public ProductDto getArchivedProductById(
+            @Parameter(description = "Id of the archived product to retrieve") @PathVariable UUID id) {
+        return productMapper.toDto(productService.getArchivedProductById(id));
+    }
+
     @Operation(summary = "Get product by id", description = "Returns a single product identified by its id")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Product found"),
@@ -81,14 +100,16 @@ public class ProductController {
         return productMapper.toDto(productService.updateProduct(id, productMapper.toCommand(request)));
     }
 
-    @Operation(summary = "Delete product", description = "Deletes a product by id")
+    @Operation(summary = "Withdraw product from sale",
+            description = "Archives the product and removes it from the add-ons of other products. "
+                    + "The archived product is kept for the retention period and then deleted permanently")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Product deleted successfully"),
+            @ApiResponse(responseCode = "204", description = "Product archived successfully"),
             @ApiResponse(responseCode = "404", description = "Product not found")
     })
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteProduct(@Parameter(description = "Id of the product to delete") @PathVariable UUID id) {
-        productService.deleteProduct(id);
+    public void archiveProduct(@Parameter(description = "Id of the product to withdraw from sale") @PathVariable UUID id) {
+        productService.archiveProduct(id);
     }
 }

@@ -1,5 +1,6 @@
 package com.estore.product;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -7,11 +8,17 @@ import java.util.UUID;
 public interface ProductRepositoryPort {
     Product save(Product product);
 
-    Optional<Product> findById(UUID id);
+    Optional<Product> findActiveById(UUID id);
 
-    List<Product> findAll(ProductType type);
+    List<Product> findAllActive(ProductType type);
 
-    boolean existsById(UUID id);
+    boolean existsActiveById(UUID id);
 
-    void deleteById(UUID id);
+    Optional<Product> findArchivedById(UUID id);
+
+    List<Product> findAllArchived();
+
+    void removeAddOnsReferencing(UUID productId);
+
+    long deleteArchivedBefore(Instant cutoff);
 }

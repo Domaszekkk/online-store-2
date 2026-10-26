@@ -2,6 +2,7 @@ package com.estore.product;
 
 import lombok.*;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -21,4 +22,5 @@ public class ProductDto {
     private List<ProductOptionDto> options;
     private List<ProductVariantDto> variants;
     private List<AddOnDto> addOns;
+    private Instant archivedAt;
 }

@@ -2,6 +2,7 @@ package com.estore.product;
 
 import lombok.*;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +32,8 @@ public class Product {
 
     @Builder.Default
     private List<AddOn> addOns = new ArrayList<>();
+
+    private Instant archivedAt;
 
     public static Product from(AddProductCommand command) {
         List<ProductVariant> variants = command.getVariants() != null ? command.getVariants() : new ArrayList<>();
@@ -66,6 +69,10 @@ public class Product {
         if (command.getAddOns() != null) {
             this.addOns = new ArrayList<>(command.getAddOns());
         }
+    }
+
+    public void archive(Instant archivedAt) {
+        this.archivedAt = archivedAt;
     }
 
     private static void assignMissingVariantIds(List<ProductVariant> variants) {

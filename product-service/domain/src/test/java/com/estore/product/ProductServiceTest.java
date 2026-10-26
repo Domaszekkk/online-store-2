@@ -6,10 +6,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.Period;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,10 +22,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class ProductServiceTest {
+    private static final Instant NOW = Instant.parse("2026-10-22T10:00:00Z");
 
     private ProductRepositoryPort productRepositoryPort;
     private ProductService productService;
@@ -28,7 +33,10 @@ class ProductServiceTest {
     @BeforeEach
     void setup() {
         this.productRepositoryPort = Mockito.mock(ProductRepositoryPort.class);
-        this.productService = new ProductService(productRepositoryPort);
+        TransactionPort transactionPort = Mockito.mock(TransactionPort.class);
+        when(transactionPort.inTransaction(any())).thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(0).get());
+        this.productService = new ProductService(
+                productRepositoryPort, transactionPort, Clock.fixed(NOW, ZoneOffset.UTC), Period.ofYears(2));
     }
 
     @Test
@@ -55,7 +63,7 @@ class ProductServiceTest {
     void getProductById_DataCorrect_ReturnsProduct() {
         UUID id = UUID.randomUUID();
         Product product = Product.builder().id(id).name("ProBook X15").type(ProductType.COMPUTER).build();
-        when(productRepositoryPort.findById(id)).thenReturn(Optional.of(product));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(product));
 
         Product result = productService.getProductById(id);
 
@@ -68,7 +76,7 @@ class ProductServiceTest {
     @Test
     void getProductById_ProductNotFound_ThrowsProductNotFoundException() {
         UUID id = UUID.randomUUID();
-        when(productRepositoryPort.findById(id)).thenReturn(Optional.empty());
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.empty());
 
         ProductNotFoundException exception = Assertions.assertThrows(
                 ProductNotFoundException.class, () -> productService.getProductById(id));
@@ -82,7 +90,7 @@ class ProductServiceTest {
     @Test
     void getProducts_ByType_ReturnsProducts() {
         Product product = Product.builder().id(UUID.randomUUID()).name("ProBook X15").type(ProductType.COMPUTER).build();
-        when(productRepositoryPort.findAll(ProductType.COMPUTER)).thenReturn(List.of(product));
+        when(productRepositoryPort.findAllActive(ProductType.COMPUTER)).thenReturn(List.of(product));
 
         List<Product> result = productService.getProducts(ProductType.COMPUTER);
 
@@ -96,7 +104,7 @@ class ProductServiceTest {
     void getProducts_NoType_ReturnsAllProducts() {
         Product product1 = Product.builder().id(UUID.randomUUID()).name("ProBook X15").type(ProductType.COMPUTER).build();
         Product product2 = Product.builder().id(UUID.randomUUID()).name("Cable HDMI").type(ProductType.ELECTRONICS).build();
-        when(productRepositoryPort.findAll(null)).thenReturn(List.of(product1, product2));
+        when(productRepositoryPort.findAllActive(null)).thenReturn(List.of(product1, product2));
 
         List<Product> result = productService.getProducts(null);
 
@@ -112,7 +120,7 @@ class ProductServiceTest {
                 .type(ProductType.COMPUTER)
                 .options(List.of(ProductOption.builder().name("Procesor").position(1).values(List.of("i5", "i7")).build()))
                 .build();
-        when(productRepositoryPort.findById(id)).thenReturn(Optional.of(product));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(product));
 
         List<ProductOption> result = productService.getProductConfiguration(id);
 
@@ -134,7 +142,7 @@ class ProductServiceTest {
                 .name("New name").type(ProductType.COMPUTER).description("Updated")
                 .basePrice(Money.of(new BigDecimal("4999.00"), "PLN"))
                 .build();
-        when(productRepositoryPort.findById(id)).thenReturn(Optional.of(existing));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existing));
         when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Product result = productService.updateProduct(id, request);
@@ -151,7 +159,7 @@ class ProductServiceTest {
     void updateProduct_ProductNotFound_ThrowsProductNotFoundException() {
         UUID id = UUID.randomUUID();
         UpdateProductCommand request = UpdateProductCommand.builder().name("New name").build();
-        when(productRepositoryPort.findById(id)).thenReturn(Optional.empty());
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.empty());
 
         ProductNotFoundException exception = Assertions.assertThrows(
                 ProductNotFoundException.class, () -> productService.updateProduct(id, request));
@@ -161,27 +169,64 @@ class ProductServiceTest {
     }
 
     @Test
-    void deleteProduct_DataCorrect_DeletesProduct() {
+    void archiveProduct_ActiveProduct_SetsArchiveDateAndRemovesItFromOtherProductsAddOns() {
         UUID id = UUID.randomUUID();
-        when(productRepositoryPort.existsById(id)).thenReturn(true);
+        Product product = Product.builder().id(id).name("Kabel HDMI").type(ProductType.ELECTRONICS).build();
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(product));
+        when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        productService.deleteProduct(id);
+        productService.archiveProduct(id);
 
-        verify(productRepositoryPort).existsById(id);
-        verify(productRepositoryPort).deleteById(id);
-        verifyNoMoreInteractions(productRepositoryPort);
+        assertEquals(NOW, product.getArchivedAt());
+        verify(productRepositoryPort).removeAddOnsReferencing(id);
+        verify(productRepositoryPort).save(product);
     }
 
     @Test
-    void deleteProduct_ProductNotFound_ThrowsProductNotFoundException() {
+    void archiveProduct_ProductNotFound_ThrowsProductNotFoundException() {
         UUID id = UUID.randomUUID();
-        when(productRepositoryPort.existsById(id)).thenReturn(false);
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.empty());
 
         ProductNotFoundException exception = Assertions.assertThrows(
-                ProductNotFoundException.class, () -> productService.deleteProduct(id));
+                ProductNotFoundException.class, () -> productService.archiveProduct(id));
 
         assertEquals(404, exception.getResponseCode());
-        verify(productRepositoryPort, never()).deleteById(any());
+        verify(productRepositoryPort, never()).removeAddOnsReferencing(any());
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void getArchivedProductById_ProductArchived_ReturnsProduct() {
+        UUID id = UUID.randomUUID();
+        Product product = Product.builder().id(id).name("Kabel HDMI").archivedAt(NOW).build();
+        when(productRepositoryPort.findArchivedById(id)).thenReturn(Optional.of(product));
+
+        Product result = productService.getArchivedProductById(id);
+
+        assertAll(
+                () -> assertEquals(id, result.getId()),
+                () -> assertEquals(NOW, result.getArchivedAt())
+        );
+    }
+
+    @Test
+    void getArchivedProductById_ProductNotArchived_ThrowsProductNotFoundException() {
+        UUID id = UUID.randomUUID();
+        when(productRepositoryPort.findArchivedById(id)).thenReturn(Optional.empty());
+
+        ProductNotFoundException exception = Assertions.assertThrows(
+                ProductNotFoundException.class, () -> productService.getArchivedProductById(id));
+
+        assertEquals(404, exception.getResponseCode());
+    }
+
+    @Test
+    void deleteExpiredArchivedProducts_DeletesProductsArchivedBeforeRetentionPeriod() {
+        when(productRepositoryPort.deleteArchivedBefore(Instant.parse("2024-10-22T10:00:00Z"))).thenReturn(3L);
+
+        long result = productService.deleteExpiredArchivedProducts();
+
+        assertEquals(3, result);
     }
 
     private AddOn addOn(UUID addOnProductId) {
@@ -203,7 +248,7 @@ class ProductServiceTest {
         AddProductCommand command = AddProductCommand.builder()
                 .name("ProBook X15").type(ProductType.COMPUTER)
                 .addOns(List.of(addOn(addOnProductId))).build();
-        when(productRepositoryPort.existsById(addOnProductId)).thenReturn(true);
+        when(productRepositoryPort.existsActiveById(addOnProductId)).thenReturn(true);
         when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Product result = productService.addProduct(command);
@@ -217,7 +262,7 @@ class ProductServiceTest {
         AddProductCommand command = AddProductCommand.builder()
                 .name("ProBook X15").type(ProductType.COMPUTER)
                 .addOns(List.of(addOn(addOnProductId))).build();
-        when(productRepositoryPort.existsById(addOnProductId)).thenReturn(false);
+        when(productRepositoryPort.existsActiveById(addOnProductId)).thenReturn(false);
 
         InvalidAddOnException exception = Assertions.assertThrows(
                 InvalidAddOnException.class, () -> productService.addProduct(command));
@@ -254,7 +299,7 @@ class ProductServiceTest {
                 .name("ProBook X15").type(ProductType.COMPUTER)
                 .variants(List.of(variant(existingVariantId, "PBX15-I7-16"), variant(null, "PBX15-I9-32")))
                 .build();
-        when(productRepositoryPort.findById(id)).thenReturn(Optional.of(existing));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existing));
         when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Product result = productService.updateProduct(id, request);
@@ -276,7 +321,7 @@ class ProductServiceTest {
                 .build();
         UpdateProductCommand request = UpdateProductCommand.builder()
                 .name("ProBook X15 Gen2").type(ProductType.COMPUTER).build();
-        when(productRepositoryPort.findById(id)).thenReturn(Optional.of(existing));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existing));
         when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Product result = productService.updateProduct(id, request);
@@ -295,7 +340,7 @@ class ProductServiceTest {
         UpdateProductCommand request = UpdateProductCommand.builder()
                 .name("ProBook X15").type(ProductType.COMPUTER)
                 .addOns(List.of(addOn(id))).build();
-        when(productRepositoryPort.findById(id)).thenReturn(Optional.of(existing));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existing));
 
         InvalidAddOnException exception = Assertions.assertThrows(
                 InvalidAddOnException.class, () -> productService.updateProduct(id, request));

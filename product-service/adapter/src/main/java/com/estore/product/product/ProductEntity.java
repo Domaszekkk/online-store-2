@@ -4,6 +4,7 @@ import com.estore.product.ProductType;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -60,4 +61,7 @@ public class ProductEntity {
     @JoinColumn(name = "product_id")
     @Builder.Default
     private List<AddOnEntity> addOns = new ArrayList<>();
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
 }
