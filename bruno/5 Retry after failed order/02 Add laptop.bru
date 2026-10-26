@@ -1,0 +1,33 @@
+meta {
+  name: 02 Add laptop
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{cartServiceUrl}}/carts/{{retryCartId}}/items
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{variantId}}",
+    "quantity": 1
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("retryItemId", res.getBody().items[0].id);
+  }
+}

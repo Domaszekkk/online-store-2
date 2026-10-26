@@ -1,0 +1,31 @@
+meta {
+  name: 07 Add unavailable variant (409)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{cartServiceUrl}}/carts/{{cartId}}/items
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{unavailableVariantId}}",
+    "quantity": 1
+  }
+}
+
+assert {
+  res.status: eq 409
+}
+
+docs {
+  The i9 variant is COMING_SOON, so it cannot be added.
+}

@@ -1,0 +1,15 @@
+meta {
+  name: 07 Get all orders
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{orderServiceUrl}}/orders
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}

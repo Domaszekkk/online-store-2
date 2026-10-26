@@ -1,0 +1,15 @@
+meta {
+  name: 05 Get document of unknown order (404)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{invoiceServiceUrl}}/documents/order/00000000-0000-0000-0000-000000000000/details
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+}

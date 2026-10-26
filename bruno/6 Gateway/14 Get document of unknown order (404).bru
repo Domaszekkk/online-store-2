@@ -1,0 +1,16 @@
+meta {
+  name: 14 Get document of unknown order (404)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{gatewayUrl}}/shop/orders/00000000-0000-0000-0000-000000000000/document
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+  res.body.message: contains not found
+}

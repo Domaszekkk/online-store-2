@@ -1,0 +1,30 @@
+meta {
+  name: 12 Place order again from the same cart (409)
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{gatewayUrl}}/shop/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{gatewayCartId}}",
+    "customer": { "firstName": "Jan", "lastName": "Kowalski", "email": "{{customerEmail}}", "phone": "+48 600 100 200" },
+    "shippingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "paymentMethod": "BLIK",
+    "deliveryMethod": "COURIER"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.message: contains has already been placed from cart
+}

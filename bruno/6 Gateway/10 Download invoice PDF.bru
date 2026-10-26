@@ -1,0 +1,25 @@
+meta {
+  name: 10 Download invoice PDF
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{gatewayUrl}}/shop/orders/{{gatewayOrderId}}/document
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: eq application/pdf
+  res.headers['content-disposition']: contains faktura-FV-
+}
+
+script:pre-request {
+  await new Promise(resolve => setTimeout(resolve, 3000));
+}
+
+docs {
+  Screen 3: link to the PDF. Waits 3 seconds so the invoice is issued. Bruno shows a preview in the response pane.
+}

@@ -1,0 +1,21 @@
+meta {
+  name: 11 Get order summary
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{gatewayUrl}}/shop/orders/{{gatewayOrderId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.orderNumber: startsWith ORD-
+  res.body.deliveryCost.amount: eq 19.99
+  res.body.lines[0].quantity: eq 2
+  res.body.lines[0].addOns[0].name: eq Kabel HDMI 2m
+  res.body.cartId: isUndefined
+  res.body.lines[0].stockKeepingUnit: isUndefined
+}

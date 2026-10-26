@@ -1,0 +1,29 @@
+meta {
+  name: 01 Get invoice details
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{invoiceServiceUrl}}/documents/order/{{orderId}}/details
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.type: eq INVOICE
+  res.body.number: startsWith FV/
+  res.body.buyer.companyName: eq Kowalski Sp. z o.o.
+  res.body.grossTotal.amount: eq 9295.99
+}
+
+script:pre-request {
+  await new Promise(resolve => setTimeout(resolve, 3000));
+}
+
+docs {
+  The invoice is issued asynchronously (order-service outbox -> Kafka -> invoice-service), so this request waits 3 seconds first.
+  404 means the document is not issued yet - send it again after a moment.
+  Lines: 2 laptops (VAT 23%), 2 cables (VAT 8%), courier delivery (VAT 23%); vatSummaries has one entry per rate.
+}

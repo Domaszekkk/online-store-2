@@ -1,0 +1,43 @@
+meta {
+  name: 04 Add laptop with cable
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{gatewayUrl}}/shop/carts/{{gatewayCartId}}/items
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{variantId}}",
+    "quantity": 1,
+    "addOns": [
+      { "productId": "{{addOnProductId}}", "quantity": 1 }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.total.amount: eq 4638
+  res.body.items[0].vatRate: isUndefined
+  res.body.items[0].stockKeepingUnit: isUndefined
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("gatewayItemId", res.getBody().items[0].id);
+  }
+}
+
+docs {
+  1 laptop (4599.00) + 1 cable (39.00) = 4638.00.
+}

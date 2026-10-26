@@ -1,0 +1,28 @@
+meta {
+  name: 09 Add laptop to second cart
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{cartServiceUrl}}/carts/{{secondCartId}}/items
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{variantId}}",
+    "quantity": 1
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.total.amount: eq 4599
+}

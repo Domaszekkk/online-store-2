@@ -1,0 +1,26 @@
+meta {
+  name: 01 Create cart
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{cartServiceUrl}}/carts
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("retryCartId", res.getBody().id);
+  }
+}
+
+docs {
+  Scenario: order-service closed the cart, but then failed (e.g. timeout) and did not create the order.
+  The customer clicks "Place order" again and the order must still be created.
+}

@@ -1,0 +1,29 @@
+meta {
+  name: 05 Change item in closed cart (409)
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{cartServiceUrl}}/carts/{{retryCartId}}/items/{{retryItemId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "quantity": 5
+  }
+}
+
+assert {
+  res.status: eq 409
+}
+
+docs {
+  A closed cart can no longer be changed - the order is placed exactly from what was checked out.
+}

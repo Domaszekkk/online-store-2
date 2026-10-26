@@ -1,0 +1,20 @@
+meta {
+  name: 03 Checkout cart (simulates failed order)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{cartServiceUrl}}/carts/{{retryCartId}}/checkout
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq CHECKED_OUT
+}
+
+docs {
+  Normally only order-service calls this. Calling it by hand gives the state after a failed order: cart closed, no order.
+}

@@ -1,0 +1,27 @@
+meta {
+  name: 02 Get product configuration
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{gatewayUrl}}/shop/products/{{productId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.options.length: eq 2
+  res.body.variants.length: eq 2
+  res.body.variants[0].price: isDefined
+  res.body.variants[0].vatRate: isUndefined
+  res.body.variants[0].stockKeepingUnit: isUndefined
+  res.body.addOns[0].name: eq Kabel HDMI 2m
+  res.body.addOns[0].vatRate: isUndefined
+}
+
+docs {
+  Screen 1 (configurator): options, variants with price and availability, add-ons.
+  VAT rates and SKUs stay inside the services.
+}

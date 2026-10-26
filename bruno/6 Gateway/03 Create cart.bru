@@ -1,0 +1,23 @@
+meta {
+  name: 03 Create cart
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{gatewayUrl}}/shop/carts
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 201
+  res.body.status: eq ACTIVE
+  res.body.items.length: eq 0
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("gatewayCartId", res.getBody().id);
+  }
+}

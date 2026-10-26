@@ -1,0 +1,264 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-documents-table
+      author: estore
+      comment: "Invoice or purchase confirmation issued for one order; seller and buyer data are snapshots from the moment of issue"
+      changes:
+        - createTable:
+            tableName: documents
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_documents
+                    nullable: false
+              - column:
+                  name: type
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: number
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_documents_number
+              - column:
+                  name: order_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_documents_order_id
+              - column:
+                  name: order_number
+                  type: VARCHAR(20)
+              - column:
+                  name: issued_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: sale_date
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: payment_method
+                  type: VARCHAR(50)
+              - column:
+                  name: delivery_method
+                  type: VARCHAR(50)
+              - column:
+                  name: seller_name
+                  type: VARCHAR(255)
+              - column:
+                  name: seller_tax_identification_number
+                  type: VARCHAR(10)
+              - column:
+                  name: seller_street
+                  type: VARCHAR(255)
+              - column:
+                  name: seller_city
+                  type: VARCHAR(100)
+              - column:
+                  name: seller_postal_code
+                  type: VARCHAR(20)
+              - column:
+                  name: seller_country
+                  type: VARCHAR(100)
+              - column:
+                  name: seller_bank_account_number
+                  type: VARCHAR(50)
+              - column:
+                  name: buyer_full_name
+                  type: VARCHAR(255)
+              - column:
+                  name: buyer_company_name
+                  type: VARCHAR(255)
+              - column:
+                  name: buyer_tax_identification_number
+                  type: VARCHAR(10)
+              - column:
+                  name: buyer_street
+                  type: VARCHAR(255)
+              - column:
+                  name: buyer_city
+                  type: VARCHAR(100)
+              - column:
+                  name: buyer_postal_code
+                  type: VARCHAR(20)
+              - column:
+                  name: buyer_country
+                  type: VARCHAR(100)
+              - column:
+                  name: buyer_email
+                  type: VARCHAR(255)
+              - column:
+                  name: currency
+                  type: VARCHAR(3)
+              - column:
+                  name: net_total
+                  type: numeric(19, 2)
+              - column:
+                  name: vat_total
+                  type: numeric(19, 2)
+              - column:
+                  name: gross_total
+                  type: numeric(19, 2)
+      rollback:
+        - dropTable:
+            tableName: documents
+  - changeSet:
+      id: 002-create-document-lines-table
+      author: estore
+      comment: "Lines of a document; add-ons and delivery are separate lines"
+      changes:
+        - createTable:
+            tableName: document_lines
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_document_lines
+                    nullable: false
+              - column:
+                  name: document_id
+                  type: UUID
+                  constraints:
+                    foreignKeyName: fk_document_lines_document
+                    references: documents(id)
+              - column:
+                  name: line_number
+                  type: INT
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: stock_keeping_unit
+                  type: VARCHAR(255)
+              - column:
+                  name: quantity
+                  type: INT
+              - column:
+                  name: unit_gross_price
+                  type: numeric(19, 2)
+              - column:
+                  name: vat_rate
+                  type: VARCHAR(20)
+              - column:
+                  name: net_total
+                  type: numeric(19, 2)
+              - column:
+                  name: vat_total
+                  type: numeric(19, 2)
+              - column:
+                  name: gross_total
+                  type: numeric(19, 2)
+      rollback:
+        - dropTable:
+            tableName: document_lines
+  - changeSet:
+      id: 003-create-document-vat-summaries-table
+      author: estore
+      comment: "Net, VAT and gross totals per VAT rate, computed from the gross sum of each rate"
+      changes:
+        - createTable:
+            tableName: document_vat_summaries
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_document_vat_summaries
+                    nullable: false
+              - column:
+                  name: document_id
+                  type: UUID
+                  constraints:
+                    foreignKeyName: fk_document_vat_summaries_document
+                    references: documents(id)
+              - column:
+                  name: summary_order
+                  type: INT
+              - column:
+                  name: vat_rate
+                  type: VARCHAR(20)
+              - column:
+                  name: net_total
+                  type: numeric(19, 2)
+              - column:
+                  name: vat_total
+                  type: numeric(19, 2)
+              - column:
+                  name: gross_total
+                  type: numeric(19, 2)
+      rollback:
+        - dropTable:
+            tableName: document_vat_summaries
+  - changeSet:
+      id: 004-create-document-pdfs-table
+      author: estore
+      comment: "PDF rendered once at issue time, so a downloaded document never changes"
+      changes:
+        - createTable:
+            tableName: document_pdfs
+            columns:
+              - column:
+                  name: document_id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_document_pdfs
+                    nullable: false
+                    foreignKeyName: fk_document_pdfs_document
+                    references: documents(id)
+              - column:
+                  name: order_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_document_pdfs_order_id
+              - column:
+                  name: content
+                  type: BYTEA
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropTable:
+            tableName: document_pdfs
+  - changeSet:
+      id: 005-create-document-number-counters-table
+      author: estore
+      comment: "Last issued number per document type and month (FV/2026/10/000001, PZ/2026/10/000001)"
+      changes:
+        - createTable:
+            tableName: document_number_counters
+            columns:
+              - column:
+                  name: document_type
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: period
+                  type: VARCHAR(7)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_number
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: document_number_counters
+            columnNames: document_type, period
+            constraintName: pk_document_number_counters
+      rollback:
+        - dropTable:
+            tableName: document_number_counters
