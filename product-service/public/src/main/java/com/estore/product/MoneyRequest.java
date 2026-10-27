@@ -20,6 +20,6 @@ public class MoneyRequest {
     private BigDecimal amount;
 
     @NotNull
-    @Pattern(regexp = "[A-Z]{3}", message = "must be a 3-letter ISO 4217 code, e.g. PLN")
+    @Pattern(regexp = "PLN", message = "must be PLN, the only currency of the shop")
     private String currency;
 }

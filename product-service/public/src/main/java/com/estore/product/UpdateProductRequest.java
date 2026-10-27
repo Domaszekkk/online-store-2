@@ -31,12 +31,9 @@ public class UpdateProductRequest {
 
     private Map<String, String> attributes;
 
-    @Valid
-    private List<@NotNull ProductOptionRequest> options;
+    private List<@Valid @NotNull ProductOptionRequest> options;
 
-    @Valid
-    private List<@NotNull ProductVariantRequest> variants;
+    private List<@Valid @NotNull ProductVariantRequest> variants;
 
-    @Valid
-    private List<@NotNull AddOnRequest> addOns;
+    private List<@Valid @NotNull AddOnRequest> addOns;
 }

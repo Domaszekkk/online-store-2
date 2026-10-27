@@ -6,6 +6,7 @@ import com.estore.order.Money;
 import com.estore.order.MoneyDto;
 import com.estore.order.Order;
 import com.estore.order.OrderDto;
+import com.estore.order.OrderPreviewDto;
 import com.estore.order.PaymentMethod;
 import com.estore.order.PlaceOrderCommand;
 import com.estore.order.PlaceOrderRequest;
@@ -18,6 +19,8 @@ import java.util.List;
 public interface OrderMapper {
 
     OrderDto toDto(Order order);
+
+    OrderPreviewDto toPreviewDto(Order order);
 
     List<OrderDto> toDtos(List<Order> orders);
 

@@ -6,6 +6,7 @@ import com.estore.order.OrderRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -32,6 +33,12 @@ public class OrderRepositoryAdapter implements OrderRepositoryPort {
             }
             throw exception;
         }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Order> findByIdForUpdate(UUID id) {
+        return orderJpaRepository.findByIdForUpdate(id).map(orderMapper::toModel);
     }
 
     @Override

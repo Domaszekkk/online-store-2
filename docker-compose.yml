@@ -2,6 +2,7 @@ services:
   product-service-db:
     image: postgres:17
     container_name: product-service-db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: product_service
       POSTGRES_USER: product_service
@@ -20,7 +21,7 @@ services:
     build:
       context: ./product-service
     container_name: product-service-app
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       product-service-db:
         condition: service_healthy
@@ -35,6 +36,7 @@ services:
   cart-service-db:
     image: postgres:17
     container_name: cart-service-db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: cart_service
       POSTGRES_USER: cart_service
@@ -53,7 +55,7 @@ services:
     build:
       context: ./cart-service
     container_name: cart-service-app
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       cart-service-db:
         condition: service_healthy
@@ -71,6 +73,7 @@ services:
   order-service-db:
     image: postgres:17
     container_name: order-service-db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: order_service
       POSTGRES_USER: order_service
@@ -89,7 +92,7 @@ services:
     build:
       context: ./order-service
     container_name: order-service-app
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       order-service-db:
         condition: service_healthy
@@ -110,6 +113,7 @@ services:
   invoice-service-db:
     image: postgres:17
     container_name: invoice-service-db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: invoice_service
       POSTGRES_USER: invoice_service
@@ -128,7 +132,7 @@ services:
     build:
       context: ./invoice-service
     container_name: invoice-service-app
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       invoice-service-db:
         condition: service_healthy
@@ -147,7 +151,7 @@ services:
     build:
       context: ./gateway-service
     container_name: gateway-service-app
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       product-service:
         condition: service_healthy
@@ -169,6 +173,7 @@ services:
   kafka:
     image: apache/kafka:4.3.1
     container_name: kafka
+    restart: unless-stopped
     environment:
       CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
       KAFKA_NODE_ID: 1

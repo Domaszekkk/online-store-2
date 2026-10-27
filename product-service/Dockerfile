@@ -6,7 +6,6 @@ COPY model model
 COPY domain domain
 COPY public public
 COPY adapter adapter
-# Maven repository is cached between builds, so dependencies are not downloaded again on every code change
 RUN --mount=type=cache,target=/root/.m2 mvn clean package -DskipTests -B
 
 FROM eclipse-temurin:21-jre

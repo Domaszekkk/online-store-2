@@ -17,9 +17,12 @@ public class ProductService {
     private final Period archiveRetentionPeriod;
 
     public Product addProduct(AddProductCommand command) {
-        Product product = Product.from(command);
-        validateAddOns(product.getId(), product.getAddOns());
-        return productRepositoryPort.save(product);
+        return transactionPort.inTransaction(() -> {
+            Product product = Product.from(command);
+            validateAddOns(product.getId(), product.getAddOns());
+            requireStockKeepingUnitsFree(product);
+            return productRepositoryPort.save(product);
+        });
     }
 
     public Product getProductById(UUID id) {
@@ -47,17 +50,20 @@ public class ProductService {
     }
 
     public Product updateProduct(UUID id, UpdateProductCommand command) {
-        Product product = getProductById(id);
-        if (command.getAddOns() != null) {
-            validateAddOns(id, command.getAddOns());
-        }
-        product.update(command);
-        return productRepositoryPort.save(product);
+        return transactionPort.inTransaction(() -> {
+            Product product = getProductForUpdate(id);
+            if (command.getAddOns() != null) {
+                validateAddOns(id, command.getAddOns());
+            }
+            product.update(command);
+            requireStockKeepingUnitsFree(product);
+            return productRepositoryPort.save(product);
+        });
     }
 
     public void archiveProduct(UUID id) {
         transactionPort.inTransaction(() -> {
-            Product product = getProductById(id);
+            Product product = getProductForUpdate(id);
             product.archive(clock.instant());
             productRepositoryPort.removeAddOnsReferencing(id);
             return productRepositoryPort.save(product);
@@ -67,6 +73,20 @@ public class ProductService {
     public long deleteExpiredArchivedProducts() {
         Instant cutoff = OffsetDateTime.now(clock).minus(archiveRetentionPeriod).toInstant();
         return productRepositoryPort.deleteArchivedBefore(cutoff);
+    }
+
+    private Product getProductForUpdate(UUID id) {
+        return productRepositoryPort
+                .findActiveByIdForUpdate(id)
+                .orElseThrow(() -> new ProductNotFoundException(id));
+    }
+
+    private void requireStockKeepingUnitsFree(Product product) {
+        List<String> takenStockKeepingUnits = productRepositoryPort
+                .findStockKeepingUnitsUsedByOtherActiveProducts(product.stockKeepingUnits(), product.getId());
+        if (!takenStockKeepingUnits.isEmpty()) {
+            throw new StockKeepingUnitTakenException(takenStockKeepingUnits);
+        }
     }
 
     private void validateAddOns(UUID productId, List<AddOn> addOns) {

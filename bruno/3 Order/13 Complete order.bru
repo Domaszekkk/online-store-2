@@ -1,0 +1,26 @@
+meta {
+  name: 13 Complete order
+  type: http
+  seq: 13
+}
+
+patch {
+  url: {{orderServiceUrl}}/orders/{{orderId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "COMPLETED"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq COMPLETED
+}

@@ -8,5 +8,5 @@ public interface DocumentRepositoryPort {
 
     Optional<Document> findByOrderId(UUID orderId);
 
-    Optional<byte[]> findPdfByOrderId(UUID orderId);
+    Optional<byte[]> findPdfByDocumentId(UUID documentId);
 }

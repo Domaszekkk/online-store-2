@@ -23,6 +23,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,7 +36,7 @@ class OrderIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
     @MockitoBean
-    private CartCheckoutPort cartCheckoutPort;
+    private CartPort cartPort;
     @Autowired
     private OrderRepositoryPort orderRepositoryPort;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -46,7 +47,7 @@ class OrderIntegrationTest {
 
     private UUID checkoutReturnsTwoLaptopsAndOneCable() {
         UUID cartId = UUID.randomUUID();
-        when(cartCheckoutPort.checkout(cartId)).thenReturn(CartDetails.builder()
+        when(cartPort.checkout(cartId)).thenReturn(CartDetails.builder()
                 .id(cartId)
                 .items(List.of(CartItemDetails.builder()
                         .productId(UUID.randomUUID()).variantId(UUID.randomUUID())
@@ -76,6 +77,51 @@ class OrderIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response).get("id").asText();
+    }
+
+    @Test
+    void previewOrder_thenPlaceOrder_PreviewMatchesPlacedOrderAndCartStaysOpen() throws Exception {
+        UUID cartId = checkoutReturnsTwoLaptopsAndOneCable();
+        CartDetails cart = cartPort.checkout(cartId);
+        when(cartPort.getCart(cartId)).thenReturn(cart);
+
+        mockMvc.perform(post("/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(orderBody(cartId, "preview@example.com", "PARCEL_LOCKER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderNumber").doesNotExist())
+                .andExpect(jsonPath("$.lines[0].quantity").value(2))
+                .andExpect(jsonPath("$.deliveryCost.amount").value(12.99))
+                .andExpect(jsonPath("$.grandTotal.amount").value(9249.99));
+        mockMvc.perform(get("/orders").param("email", "preview@example.com"))
+                .andExpect(jsonPath("$.length()").value(0));
+
+        String id = placeOrder(cartId, "preview@example.com");
+
+        mockMvc.perform(post("/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(orderBody(cartId, "preview@example.com", "PARCEL_LOCKER")))
+                .andExpect(status().isConflict());
+        mockMvc.perform(get("/orders/{id}", id))
+                .andExpect(jsonPath("$.status").value("NEW"));
+    }
+
+    @Test
+    void changeOrderStatus_FollowsAllowedTransitions() throws Exception {
+        String id = placeOrder(checkoutReturnsTwoLaptopsAndOneCable(), "status@example.com");
+
+        mockMvc.perform(patch("/orders/{id}/status", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SHIPPED\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Order " + id + " cannot change status from NEW to SHIPPED"));
+        mockMvc.perform(patch("/orders/{id}/status", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CANCELLED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+        mockMvc.perform(get("/orders/{id}", id))
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
     }
 
     @Test
@@ -123,7 +169,7 @@ class OrderIntegrationTest {
     void placeOrder_CartEmpty_Returns409AndSavesNothing() throws Exception {
         UUID cartId = UUID.randomUUID();
         String email = "conflict-" + UUID.randomUUID() + "@example.com";
-        when(cartCheckoutPort.checkout(cartId))
+        when(cartPort.checkout(cartId))
                 .thenThrow(new CartNotOrderableException(cartId, "Cart with id " + cartId + " is empty and cannot be checked out"));
 
         mockMvc.perform(post("/orders")
@@ -150,7 +196,7 @@ class OrderIntegrationTest {
                 .andExpect(jsonPath("$.message").value(
                         "Order " + firstOrderNumber + " has already been placed from cart " + cartId));
 
-        verify(cartCheckoutPort, times(1)).checkout(cartId);
+        verify(cartPort, times(1)).checkout(cartId);
         mockMvc.perform(get("/orders").param("email", email))
                 .andExpect(jsonPath("$.length()").value(1));
     }

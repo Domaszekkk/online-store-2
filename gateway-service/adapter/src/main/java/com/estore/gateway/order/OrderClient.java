@@ -13,6 +13,9 @@ import java.util.UUID;
 @FeignClient(name = "order-service", url = "${order.service.url}", configuration = RemoteServiceClientConfiguration.class)
 public interface OrderClient {
 
+    @PostMapping("/orders/preview")
+    OrderPreviewResponse previewOrder(@RequestBody PlaceOrderPayload payload);
+
     @PostMapping("/orders")
     OrderResponse placeOrder(@RequestBody PlaceOrderPayload payload);
 

@@ -83,6 +83,9 @@ public class OrderEntity {
     })
     private MoneyEmbeddable grandTotal;
 
+    @Column(name = "document_number", length = 30)
+    private String documentNumber;
+
     @Column(name = "created_at")
     private Instant createdAt;
 }

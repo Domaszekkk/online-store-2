@@ -7,11 +7,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 @RequiredArgsConstructor
 public class CartService {
     private final CartRepositoryPort cartRepositoryPort;
     private final ProductCatalogPort productCatalogPort;
+    private final TransactionPort transactionPort;
 
     public Cart createCart() {
         return cartRepositoryPort.save(Cart.createNew());
@@ -25,7 +27,7 @@ public class CartService {
 
     public Cart addItem(UUID cartId, AddItemCommand command) {
         CartItem.requireValidQuantity(command.getQuantity());
-        Cart cart = getCartById(cartId);
+        getCartById(cartId);
 
         ProductDetails product = productCatalogPort.getProduct(command.getProductId());
         VariantDetails variant = product.findVariant(command.getVariantId())
@@ -33,33 +35,43 @@ public class CartService {
         if (!variant.isAvailable()) {
             throw new VariantNotAvailableException(command.getVariantId());
         }
-
         List<CartItemAddOn> addOns = resolveAddOns(product, command.getAddOns());
-        CartItem item = CartItem.create(product.getId(), product.getName(), variant, command.getQuantity(), addOns);
 
-        cart.addItem(item);
-        return cartRepositoryPort.save(cart);
+        return modifyCart(cartId, cart -> cart.addItem(
+                CartItem.create(product.getId(), product.getName(), variant, command.getQuantity(), addOns)));
     }
 
     public Cart changeItemQuantity(UUID cartId, UUID itemId, ChangeItemQuantityCommand command) {
-        Cart cart = getCartById(cartId);
-        cart.changeItemQuantity(itemId, command.getQuantity());
-        return cartRepositoryPort.save(cart);
+        return modifyCart(cartId, cart -> cart.changeItemQuantity(itemId, command.getQuantity()));
     }
 
     public Cart removeItem(UUID cartId, UUID itemId) {
-        Cart cart = getCartById(cartId);
-        cart.removeItem(itemId);
-        return cartRepositoryPort.save(cart);
+        return modifyCart(cartId, cart -> cart.removeItem(itemId));
     }
 
     public Cart checkout(UUID cartId) {
-        Cart cart = getCartById(cartId);
-        if (cart.isCheckedOut()) {
-            return cart;
-        }
-        cart.checkout();
-        return cartRepositoryPort.save(cart);
+        return transactionPort.inTransaction(() -> {
+            Cart cart = getCartForUpdate(cartId);
+            if (cart.isCheckedOut()) {
+                return cart;
+            }
+            cart.checkout();
+            return cartRepositoryPort.save(cart);
+        });
+    }
+
+    private Cart modifyCart(UUID cartId, Consumer<Cart> modification) {
+        return transactionPort.inTransaction(() -> {
+            Cart cart = getCartForUpdate(cartId);
+            modification.accept(cart);
+            return cartRepositoryPort.save(cart);
+        });
+    }
+
+    private Cart getCartForUpdate(UUID cartId) {
+        return cartRepositoryPort
+                .findByIdForUpdate(cartId)
+                .orElseThrow(() -> new CartNotFoundException(cartId));
     }
 
     private List<CartItemAddOn> resolveAddOns(ProductDetails product, List<AddOnSelection> selections) {
@@ -73,6 +85,7 @@ public class CartService {
         }
         List<CartItemAddOn> addOns = new ArrayList<>();
         quantityPerAddOn.forEach((addOnProductId, quantity) -> {
+            CartItem.requireValidQuantity(quantity);
             AddOnDetails addOn = product.findAddOn(addOnProductId)
                     .orElseThrow(() -> new ProductNotFoundException(addOnProductId));
             addOns.add(CartItemAddOn.builder()

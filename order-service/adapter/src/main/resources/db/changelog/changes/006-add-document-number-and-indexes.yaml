@@ -1,0 +1,53 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-add-document-number-to-orders
+      author: estore
+      comment: "Number of the invoice or purchase confirmation; set when invoice-service reports the document as issued"
+      changes:
+        - addColumn:
+            tableName: orders
+            columns:
+              - column:
+                  name: document_number
+                  type: VARCHAR(30)
+      rollback:
+        - dropColumn:
+            tableName: orders
+            columnName: document_number
+  - changeSet:
+      id: 009-add-order-indexes
+      author: estore
+      comment: "Indexes for loading order lines by foreign key and for the case-insensitive search by customer email"
+      changes:
+        - createIndex:
+            tableName: order_lines
+            indexName: idx_order_lines_order_id
+            columns:
+              - column:
+                  name: order_id
+        - createIndex:
+            tableName: order_line_addons
+            indexName: idx_order_line_addons_order_line_id
+            columns:
+              - column:
+                  name: order_line_id
+        - dropIndex:
+            tableName: orders
+            indexName: idx_orders_customer_email
+        - sql:
+            sql: CREATE INDEX idx_orders_customer_email_upper ON orders (UPPER(customer_email))
+      rollback:
+        - sql:
+            sql: DROP INDEX idx_orders_customer_email_upper
+        - createIndex:
+            tableName: orders
+            indexName: idx_orders_customer_email
+            columns:
+              - column:
+                  name: customer_email
+        - dropIndex:
+            tableName: order_line_addons
+            indexName: idx_order_line_addons_order_line_id
+        - dropIndex:
+            tableName: order_lines
+            indexName: idx_order_lines_order_id

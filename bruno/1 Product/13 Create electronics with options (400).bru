@@ -1,0 +1,38 @@
+meta {
+  name: 13 Create electronics with options (400)
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{productServiceUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Kabel USB-C",
+    "type": "ELECTRONICS",
+    "basePrice": { "amount": 29.00, "currency": "PLN" },
+    "options": [
+      { "name": "Kolor", "position": 1, "values": ["Czarny", "Bialy"] }
+    ],
+    "variants": [
+      { "stockKeepingUnit": "USBC-BLACK-{{runId}}", "optionValues": { "Kolor": "Czarny" }, "price": { "amount": 29.00, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_23" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: eq Product of type ELECTRONICS cannot have configurable options
+}
+
+docs {
+  ELECTRONICS has no extra handling: one variant, no options and no add-ons.
+}

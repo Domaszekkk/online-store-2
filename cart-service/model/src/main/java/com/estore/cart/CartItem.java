@@ -4,6 +4,7 @@ import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -14,6 +15,8 @@ import java.util.stream.Collectors;
 @NoArgsConstructor
 @Builder
 public class CartItem {
+    public static final int MAXIMUM_QUANTITY = 99;
+
     private UUID id;
     private UUID productId;
     private UUID variantId;
@@ -50,7 +53,7 @@ public class CartItem {
     }
 
     public static void requireValidQuantity(int quantity) {
-        if (quantity < 1) {
+        if (quantity < 1 || quantity > MAXIMUM_QUANTITY) {
             throw new InvalidQuantityException(quantity);
         }
     }
@@ -66,14 +69,21 @@ public class CartItem {
     }
 
     public void absorb(CartItem other) {
+        requireValidQuantity(quantity + other.quantity);
+        for (CartItemAddOn otherAddOn : other.addOns) {
+            findAddOn(otherAddOn.getProductId())
+                    .ifPresent(addOn -> requireValidQuantity(addOn.getQuantity() + otherAddOn.getQuantity()));
+        }
         this.quantity += other.quantity;
         for (CartItemAddOn otherAddOn : other.addOns) {
-            addOns.stream()
-                    .filter(addOn -> addOn.getProductId().equals(otherAddOn.getProductId()))
-                    .findFirst()
+            findAddOn(otherAddOn.getProductId())
                     .ifPresent(addOn -> addOn.setQuantity(addOn.getQuantity() + otherAddOn.getQuantity()));
         }
         recomputeLineTotal();
+    }
+
+    private Optional<CartItemAddOn> findAddOn(UUID addOnProductId) {
+        return addOns.stream().filter(addOn -> addOn.getProductId().equals(addOnProductId)).findFirst();
     }
 
     private Set<UUID> addOnProductIds() {

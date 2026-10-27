@@ -38,7 +38,7 @@ public class DocumentController {
     @GetMapping(value = "/order/{orderId}", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> getPdf(@Parameter(description = "Id of the order") @PathVariable UUID orderId) {
         Document document = documentService.getDocumentByOrderId(orderId);
-        byte[] pdf = documentService.getPdfByOrderId(orderId);
+        byte[] pdf = documentService.getPdf(document);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()

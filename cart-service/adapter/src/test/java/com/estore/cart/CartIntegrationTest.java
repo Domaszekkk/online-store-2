@@ -11,9 +11,18 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -29,6 +38,8 @@ class CartIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @Autowired
+    private CartService cartService;
     @MockitoBean
     private ProductCatalogPort productCatalogPort;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -196,5 +207,57 @@ class CartIntegrationTest {
                 .andExpect(jsonPath("$.status").value("CHECKED_OUT"))
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].quantity").value(1));
+    }
+
+    @Test
+    void addItem_SentInParallel_KeepsEveryQuantityInOneItem() throws Exception {
+        UUID cartId = UUID.fromString(createCart());
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+        AddItemCommand command = AddItemCommand.builder().productId(productId).variantId(variantId).quantity(1).build();
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+
+        List<Future<Cart>> results = new ArrayList<>();
+        for (int request = 0; request < 10; request++) {
+            results.add(executor.submit(() -> cartService.addItem(cartId, command)));
+        }
+        for (Future<Cart> result : results) {
+            result.get(30, TimeUnit.SECONDS);
+        }
+        executor.shutdown();
+
+        Cart cart = cartService.getCartById(cartId);
+        assertAll(
+                () -> assertEquals(1, cart.getItems().size()),
+                () -> assertEquals(10, cart.getItems().get(0).getQuantity())
+        );
+    }
+
+    @Test
+    void addItemAndCheckout_SentInParallel_CheckedOutCartMatchesItsContent() throws Exception {
+        UUID cartId = UUID.fromString(createCart());
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+        AddItemCommand command = AddItemCommand.builder().productId(productId).variantId(variantId).quantity(1).build();
+        cartService.addItem(cartId, command);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        Future<Cart> addition = executor.submit(() -> cartService.addItem(cartId, command));
+        Future<Cart> checkout = executor.submit(() -> cartService.checkout(cartId));
+        Cart checkedOutCart = checkout.get(30, TimeUnit.SECONDS);
+        try {
+            addition.get(30, TimeUnit.SECONDS);
+        } catch (ExecutionException exception) {
+            assertTrue(exception.getCause() instanceof CartNotActiveException);
+        }
+        executor.shutdown();
+
+        Cart cart = cartService.getCartById(cartId);
+        assertAll(
+                () -> assertEquals(CartStatus.CHECKED_OUT, cart.getStatus()),
+                () -> assertEquals(checkedOutCart.getItems().get(0).getQuantity(), cart.getItems().get(0).getQuantity())
+        );
     }
 }

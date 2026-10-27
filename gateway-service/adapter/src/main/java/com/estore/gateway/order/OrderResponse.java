@@ -18,5 +18,6 @@ public record OrderResponse(UUID id,
                             MoneyPayload itemsTotal,
                             MoneyPayload deliveryCost,
                             MoneyPayload grandTotal,
+                            String documentNumber,
                             Instant createdAt) {
 }

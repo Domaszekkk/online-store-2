@@ -9,6 +9,8 @@ public interface OrderRepositoryPort {
 
     Optional<Order> findById(UUID id);
 
+    Optional<Order> findByIdForUpdate(UUID id);
+
     Optional<Order> findByCartId(UUID cartId);
 
     List<Order> findAll();

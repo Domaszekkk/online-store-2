@@ -5,6 +5,8 @@ import com.estore.gateway.CheckoutOptionsDto;
 import com.estore.gateway.DeliveryOption;
 import com.estore.gateway.Order;
 import com.estore.gateway.OrderDto;
+import com.estore.gateway.OrderPreview;
+import com.estore.gateway.OrderPreviewDto;
 import com.estore.gateway.PlaceOrderCommand;
 import com.estore.gateway.PlaceOrderRequest;
 import org.mapstruct.Builder;
@@ -18,6 +20,10 @@ public interface OrderMapper {
     Order toModel(OrderResponse response);
 
     OrderDto toDto(Order order);
+
+    OrderPreview toPreview(OrderPreviewResponse response);
+
+    OrderPreviewDto toDto(OrderPreview preview);
 
     PlaceOrderCommand toCommand(PlaceOrderRequest request);
 

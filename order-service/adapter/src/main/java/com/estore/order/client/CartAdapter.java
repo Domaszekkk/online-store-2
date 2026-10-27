@@ -1,6 +1,6 @@
 package com.estore.order.client;
 
-import com.estore.order.CartCheckoutPort;
+import com.estore.order.CartPort;
 import com.estore.order.CartDetails;
 import com.estore.order.CartItemAddOnDetails;
 import com.estore.order.CartItemDetails;
@@ -22,7 +22,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class CartCheckoutAdapter implements CartCheckoutPort {
+public class CartAdapter implements CartPort {
     private final CartClient cartClient;
     private final JsonMapper jsonMapper;
 
@@ -36,6 +36,18 @@ public class CartCheckoutAdapter implements CartCheckoutPort {
             throw new CartNotOrderableException(cartId, reasonFrom(exception));
         } catch (FeignException exception) {
             log.warn("Cart service checkout failed for cart {} (status {})", cartId, exception.status(), exception);
+            throw new CartServiceUnavailableException();
+        }
+    }
+
+    @Override
+    public CartDetails getCart(UUID cartId) {
+        try {
+            return map(cartClient.getCart(cartId));
+        } catch (FeignException.NotFound exception) {
+            throw new CartNotFoundException(cartId);
+        } catch (FeignException exception) {
+            log.warn("Cart service call failed for cart {} (status {})", cartId, exception.status(), exception);
             throw new CartServiceUnavailableException();
         }
     }

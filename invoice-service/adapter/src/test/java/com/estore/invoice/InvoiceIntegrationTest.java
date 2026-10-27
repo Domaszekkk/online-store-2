@@ -117,8 +117,37 @@ class InvoiceIntegrationTest {
                 () -> assertTrue(text.contains("NIP: 5260250274"), text),
                 () -> assertTrue(text.contains("Kraków"), text),
                 () -> assertTrue(text.contains("Dostawa kurierem"), text),
-                () -> assertTrue(text.contains("9 256,99 zł"), text)
+                () -> assertTrue(text.contains("Wartość zamówienia: 9 256,99 zł"), text),
+                () -> assertTrue(text.contains("Polska"), text)
         );
+        ConsumerRecord<String, String> documentIssued = awaitRecord("document-issued", orderId.toString());
+        JsonNode event = objectMapper.readTree(documentIssued.value());
+        assertAll(
+                () -> assertEquals("DocumentIssued",
+                        new String(documentIssued.headers().lastHeader("eventType").value(), StandardCharsets.UTF_8)),
+                () -> assertEquals(details.get("number").asText(), event.get("documentNumber").asText()),
+                () -> assertEquals("INVOICE", event.get("documentType").asText())
+        );
+    }
+
+    private ConsumerRecord<String, String> awaitRecord(String topic, String key) {
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG, "test-" + UUID.randomUUID(),
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class))) {
+            consumer.subscribe(List.of(topic));
+            Instant deadline = Instant.now().plusSeconds(30);
+            while (Instant.now().isBefore(deadline)) {
+                for (ConsumerRecord<String, String> record : consumer.poll(Duration.ofMillis(500))) {
+                    if (key.equals(record.key())) {
+                        return record;
+                    }
+                }
+            }
+        }
+        return fail("No record with key " + key + " was published to " + topic);
     }
 
     @Test

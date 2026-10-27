@@ -56,6 +56,18 @@ class ShopServiceTest {
     }
 
     @Test
+    void previewOrder_PassesCommandToOrderServiceAndReturnsItsSummary() {
+        PlaceOrderCommand command = PlaceOrderCommand.builder().cartId(UUID.randomUUID()).deliveryMethod("COURIER").build();
+        OrderPreview preview = OrderPreview.builder().grandTotal(pln("4657.99")).build();
+        when(orderPort.previewOrder(command)).thenReturn(preview);
+
+        OrderPreview result = shopService.previewOrder(command);
+
+        assertSame(preview, result);
+        verifyNoInteractions(cartPort, documentPort);
+    }
+
+    @Test
     void findOrderDocument_DocumentIssued_ReturnsDocument() {
         UUID orderId = UUID.randomUUID();
         OrderDocument document = OrderDocument.builder().fileName("faktura-FV-2026-10-000001.pdf").content(new byte[]{1}).build();

@@ -1,5 +1,6 @@
 package com.estore.cart;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import lombok.*;
 
@@ -10,5 +11,6 @@ import lombok.*;
 @Builder
 public class ChangeItemQuantityRequest {
     @Positive
+    @Max(99)
     private int quantity;
 }

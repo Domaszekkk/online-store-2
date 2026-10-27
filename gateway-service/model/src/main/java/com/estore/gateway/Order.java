@@ -24,5 +24,6 @@ public class Order {
     private Money itemsTotal;
     private Money deliveryCost;
     private Money grandTotal;
+    private String documentNumber;
     private Instant createdAt;
 }

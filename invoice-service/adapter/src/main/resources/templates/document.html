@@ -44,6 +44,7 @@
             <div class="name" th:text="${document.seller.name}">E-Store Sp. z o.o.</div>
             <div th:text="${document.seller.street}">ul. Przykładowa 1</div>
             <div th:text="${document.seller.postalCode + ' ' + document.seller.city}">00-001 Warszawa</div>
+            <div th:text="${document.seller.country}">Polska</div>
             <div th:text="${'NIP: ' + document.seller.taxIdentificationNumber}">NIP: 0000000000</div>
             <div th:if="${document.seller.bankAccountNumber != null}" th:text="${'Konto: ' + document.seller.bankAccountNumber}">Konto</div>
         </td>
@@ -53,12 +54,14 @@
                 <div class="name" th:text="${document.buyer.companyName}">Firma</div>
                 <div th:text="${document.buyer.street}">ul. Firmowa 5</div>
                 <div th:text="${document.buyer.postalCode + ' ' + document.buyer.city}">30-001 Kraków</div>
+                <div th:text="${document.buyer.country}">Polska</div>
                 <div th:text="${'NIP: ' + document.buyer.taxIdentificationNumber}">NIP</div>
             </th:block>
             <th:block th:unless="${document.buyer.company}">
                 <div class="name" th:text="${document.buyer.fullName}">Jan Kowalski</div>
                 <div th:text="${document.buyer.street}">ul. Domowa 7</div>
                 <div th:text="${document.buyer.postalCode + ' ' + document.buyer.city}">80-001 Gdańsk</div>
+                <div th:text="${document.buyer.country}">Polska</div>
             </th:block>
         </td>
         <td th:unless="${invoice}">
@@ -124,7 +127,7 @@
         </tr>
         </tbody>
     </table>
-    <div class="total" th:text="${'Do zapłaty: ' + #numbers.formatDecimal(document.grossTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">Do zapłaty: 0,00 zł</div>
+    <div class="total" th:text="${totalLabel + ': ' + #numbers.formatDecimal(document.grossTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">Do zapłaty: 0,00 zł</div>
 </div>
 
 <div class="note" th:if="${invoice}">Ceny zawierają podatek VAT. Kwoty VAT w podsumowaniu wyliczono od sumy cen brutto w każdej stawce.</div>

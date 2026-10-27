@@ -3,6 +3,7 @@ package com.estore.gateway.order;
 import com.estore.gateway.DocumentPendingMessage;
 import com.estore.gateway.OrderDocument;
 import com.estore.gateway.OrderDto;
+import com.estore.gateway.OrderPreviewDto;
 import com.estore.gateway.PlaceOrderRequest;
 import com.estore.gateway.ShopService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +34,21 @@ public class OrderController {
 
     @Value("${gateway.document.retry-after-seconds:2}")
     private int documentRetryAfterSeconds;
+
+    @Operation(summary = "Preview an order",
+            description = "Screen 3: returns the order summary (products with prices, delivery cost, totals and the entered data) "
+                    + "without placing the order; the cart stays open")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Order summary returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid order data"),
+            @ApiResponse(responseCode = "404", description = "Cart not found"),
+            @ApiResponse(responseCode = "409", description = "Cart is empty or an order was already placed from it"),
+            @ApiResponse(responseCode = "503", description = "Order service is unavailable")
+    })
+    @PostMapping("/preview")
+    public OrderPreviewDto previewOrder(@Valid @RequestBody PlaceOrderRequest request) {
+        return orderMapper.toDto(shopService.previewOrder(orderMapper.toCommand(request)));
+    }
 
     @Operation(summary = "Place an order",
             description = "Places an order from the cart; billingAddress means an invoice, with companyName and taxIdentificationNumber a company invoice")

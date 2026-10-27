@@ -20,6 +20,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
@@ -32,6 +33,7 @@ public class PdfRendererAdapter implements PdfRendererPort {
             "BLIK", "BLIK",
             "TRANSFER", "Przelew",
             "CASH_ON_DELIVERY", "Płatność przy odbiorze");
+    private static final Set<String> PREPAID_PAYMENT_METHODS = Set.of("CARD", "BLIK");
     private static final Map<String, String> VAT_RATE_LABELS = Map.of(
             "VAT_23", "23%",
             "VAT_8", "8%",
@@ -52,6 +54,7 @@ public class PdfRendererAdapter implements PdfRendererPort {
         context.setVariable("saleDate", DATE_FORMAT.format(document.getSaleDate()));
         context.setVariable("paymentMethod", PAYMENT_METHOD_LABELS.getOrDefault(document.getPaymentMethod(), document.getPaymentMethod()));
         context.setVariable("vatRateLabels", VAT_RATE_LABELS);
+        context.setVariable("totalLabel", PREPAID_PAYMENT_METHODS.contains(document.getPaymentMethod()) ? "Wartość zamówienia" : "Do zapłaty");
         String html = templateEngine.process("document", context);
         return toPdf(html);
     }

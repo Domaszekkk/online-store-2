@@ -12,14 +12,18 @@ import java.time.Period;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,35 +39,218 @@ class ProductServiceTest {
         this.productRepositoryPort = Mockito.mock(ProductRepositoryPort.class);
         TransactionPort transactionPort = Mockito.mock(TransactionPort.class);
         when(transactionPort.inTransaction(any())).thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(0).get());
+        when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
         this.productService = new ProductService(
                 productRepositoryPort, transactionPort, Clock.fixed(NOW, ZoneOffset.UTC), Period.ofYears(2));
     }
 
-    @Test
-    void addProduct_DataCorrect_ReturnsProduct() {
-        AddProductCommand command = AddProductCommand.builder()
+    private AddOn addOn(UUID addOnProductId) {
+        return AddOn.builder()
+                .productId(addOnProductId).name("Mysz")
+                .price(Money.of(new BigDecimal("99.00"), "PLN")).vatRate(VatRate.VAT_23).build();
+    }
+
+    private ProductVariant variant(UUID id, String stockKeepingUnit, Map<String, String> optionValues) {
+        return ProductVariant.builder()
+                .id(id).stockKeepingUnit(stockKeepingUnit)
+                .optionValues(optionValues)
+                .price(Money.of(new BigDecimal("4599.00"), "PLN"))
+                .availability(Availability.AVAILABLE).vatRate(VatRate.VAT_23).build();
+    }
+
+    private ProductOption processorOption() {
+        return ProductOption.builder().name("Procesor").position(1).values(List.of("i5", "i7", "i9")).build();
+    }
+
+    private AddProductCommand.AddProductCommandBuilder laptopCommand() {
+        return AddProductCommand.builder()
                 .name("ProBook X15")
                 .type(ProductType.COMPUTER)
                 .basePrice(Money.of(new BigDecimal("3999.00"), "PLN"))
-                .build();
-        when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                .options(new ArrayList<>(List.of(processorOption())))
+                .variants(new ArrayList<>(List.of(variant(null, "PBX15-I7", Map.of("Procesor", "i7")))));
+    }
 
-        Product result = productService.addProduct(command);
+    private AddProductCommand.AddProductCommandBuilder cableCommand() {
+        return AddProductCommand.builder()
+                .name("Kabel HDMI")
+                .type(ProductType.ELECTRONICS)
+                .basePrice(Money.of(new BigDecimal("39.00"), "PLN"))
+                .variants(new ArrayList<>(List.of(variant(null, "HDMI-2M", Map.of()))));
+    }
+
+    private Product existingLaptop(UUID id, UUID variantId) {
+        return Product.builder()
+                .id(id).name("ProBook X15").type(ProductType.COMPUTER)
+                .basePrice(Money.of(new BigDecimal("3999.00"), "PLN"))
+                .options(new ArrayList<>(List.of(processorOption())))
+                .variants(new ArrayList<>(List.of(variant(variantId, "PBX15-I7", Map.of("Procesor", "i7")))))
+                .build();
+    }
+
+    @Test
+    void addProduct_DataCorrect_ReturnsProduct() {
+        Product result = productService.addProduct(laptopCommand().build());
 
         assertAll(
                 () -> assertNotNull(result.getId()),
                 () -> assertEquals("ProBook X15", result.getName()),
                 () -> assertEquals(ProductType.COMPUTER, result.getType()),
                 () -> assertEquals(new BigDecimal("3999.00"), result.getBasePrice().amount()),
-                () -> assertEquals("PLN", result.getBasePrice().currency())
+                () -> assertNotNull(result.getVariants().get(0).getId())
         );
+    }
+
+    @Test
+    void addProduct_VariantIdGivenByClient_AssignsNewVariantId() {
+        UUID foreignVariantId = UUID.randomUUID();
+        AddProductCommand command = laptopCommand()
+                .variants(new ArrayList<>(List.of(variant(foreignVariantId, "PBX15-I7", Map.of("Procesor", "i7")))))
+                .build();
+
+        Product result = productService.addProduct(command);
+
+        assertNotEquals(foreignVariantId, result.getVariants().get(0).getId());
+    }
+
+    @Test
+    void addProduct_NoVariants_ThrowsInvalidProductException() {
+        AddProductCommand command = laptopCommand().variants(new ArrayList<>()).build();
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.addProduct(command));
+
+        assertAll(
+                () -> assertEquals(400, exception.getResponseCode()),
+                () -> assertEquals("Product must have at least one variant", exception.getMessage())
+        );
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void addProduct_ElectronicsWithOptions_ThrowsInvalidProductException() {
+        AddProductCommand command = cableCommand().options(List.of(processorOption())).build();
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.addProduct(command));
+
+        assertEquals("Product of type ELECTRONICS cannot have configurable options", exception.getMessage());
+    }
+
+    @Test
+    void addProduct_ElectronicsWithTwoVariants_ThrowsInvalidProductException() {
+        AddProductCommand command = cableCommand()
+                .variants(new ArrayList<>(List.of(variant(null, "HDMI-2M", Map.of()), variant(null, "HDMI-3M", Map.of()))))
+                .build();
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.addProduct(command));
+
+        assertEquals("Product of type ELECTRONICS must have exactly one variant, but has 2", exception.getMessage());
+    }
+
+    @Test
+    void addProduct_ElectronicsWithAddOns_ThrowsInvalidProductException() {
+        AddProductCommand command = cableCommand().addOns(List.of(addOn(UUID.randomUUID()))).build();
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.addProduct(command));
+
+        assertEquals("Product of type ELECTRONICS cannot have add-ons", exception.getMessage());
+    }
+
+    @Test
+    void addProduct_VariantValueOutsideOption_ThrowsInvalidProductException() {
+        AddProductCommand command = laptopCommand()
+                .variants(new ArrayList<>(List.of(variant(null, "PBX15-M1", Map.of("Procesor", "M1")))))
+                .build();
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.addProduct(command));
+
+        assertEquals("Variant PBX15-M1 has value M1 that is not allowed for option Procesor", exception.getMessage());
+    }
+
+    @Test
+    void addProduct_VariantWithUnknownOption_ThrowsInvalidProductException() {
+        AddProductCommand command = laptopCommand()
+                .variants(new ArrayList<>(List.of(variant(null, "PBX15-I7", Map.of("Procesor", "i7", "Kolor", "Czarny")))))
+                .build();
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.addProduct(command));
+
+        assertEquals("Variant PBX15-I7 must have exactly one value for each option [Procesor]", exception.getMessage());
+    }
+
+    @Test
+    void addProduct_TwoVariantsWithSameOptionValues_ThrowsInvalidProductException() {
+        AddProductCommand command = laptopCommand()
+                .variants(new ArrayList<>(List.of(
+                        variant(null, "PBX15-I7", Map.of("Procesor", "i7")),
+                        variant(null, "PBX15-I7-B", Map.of("Procesor", "i7")))))
+                .build();
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.addProduct(command));
+
+        assertEquals("Variant PBX15-I7-B repeats the option values of another variant", exception.getMessage());
+    }
+
+    @Test
+    void addProduct_StockKeepingUnitUsedByOtherProduct_ThrowsStockKeepingUnitTakenException() {
+        when(productRepositoryPort.findStockKeepingUnitsUsedByOtherActiveProducts(anyCollection(), any(UUID.class)))
+                .thenReturn(List.of("PBX15-I7"));
+
+        StockKeepingUnitTakenException exception = Assertions.assertThrows(
+                StockKeepingUnitTakenException.class, () -> productService.addProduct(laptopCommand().build()));
+
+        assertAll(
+                () -> assertEquals(409, exception.getResponseCode()),
+                () -> assertEquals("Stock keeping units [PBX15-I7] are already used by another product on sale",
+                        exception.getMessage())
+        );
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void addProduct_AddOnProductExists_SavesProduct() {
+        UUID addOnProductId = UUID.randomUUID();
+        when(productRepositoryPort.existsActiveById(addOnProductId)).thenReturn(true);
+
+        Product result = productService.addProduct(laptopCommand().addOns(List.of(addOn(addOnProductId))).build());
+
+        assertEquals(addOnProductId, result.getAddOns().get(0).getProductId());
+    }
+
+    @Test
+    void addProduct_AddOnProductDoesNotExist_ThrowsInvalidAddOnException() {
+        UUID addOnProductId = UUID.randomUUID();
+        when(productRepositoryPort.existsActiveById(addOnProductId)).thenReturn(false);
+
+        InvalidAddOnException exception = Assertions.assertThrows(InvalidAddOnException.class,
+                () -> productService.addProduct(laptopCommand().addOns(List.of(addOn(addOnProductId))).build()));
+
+        assertAll(
+                () -> assertEquals(400, exception.getResponseCode()),
+                () -> assertEquals("Add-on product with id " + addOnProductId + " does not exist", exception.getMessage())
+        );
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void addProduct_AddOnWithoutProductId_ThrowsInvalidAddOnException() {
+        InvalidAddOnException exception = Assertions.assertThrows(InvalidAddOnException.class,
+                () -> productService.addProduct(laptopCommand().addOns(List.of(addOn(null))).build()));
+
+        assertEquals(400, exception.getResponseCode());
+        verify(productRepositoryPort, never()).save(any());
     }
 
     @Test
     void getProductById_DataCorrect_ReturnsProduct() {
         UUID id = UUID.randomUUID();
-        Product product = Product.builder().id(id).name("ProBook X15").type(ProductType.COMPUTER).build();
-        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(product));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existingLaptop(id, UUID.randomUUID())));
 
         Product result = productService.getProductById(id);
 
@@ -89,8 +276,8 @@ class ProductServiceTest {
 
     @Test
     void getProducts_ByType_ReturnsProducts() {
-        Product product = Product.builder().id(UUID.randomUUID()).name("ProBook X15").type(ProductType.COMPUTER).build();
-        when(productRepositoryPort.findAllActive(ProductType.COMPUTER)).thenReturn(List.of(product));
+        when(productRepositoryPort.findAllActive(ProductType.COMPUTER))
+                .thenReturn(List.of(existingLaptop(UUID.randomUUID(), UUID.randomUUID())));
 
         List<Product> result = productService.getProducts(ProductType.COMPUTER);
 
@@ -102,9 +289,9 @@ class ProductServiceTest {
 
     @Test
     void getProducts_NoType_ReturnsAllProducts() {
-        Product product1 = Product.builder().id(UUID.randomUUID()).name("ProBook X15").type(ProductType.COMPUTER).build();
-        Product product2 = Product.builder().id(UUID.randomUUID()).name("Cable HDMI").type(ProductType.ELECTRONICS).build();
-        when(productRepositoryPort.findAllActive(null)).thenReturn(List.of(product1, product2));
+        Product cable = Product.builder().id(UUID.randomUUID()).name("Cable HDMI").type(ProductType.ELECTRONICS).build();
+        when(productRepositoryPort.findAllActive(null))
+                .thenReturn(List.of(existingLaptop(UUID.randomUUID(), UUID.randomUUID()), cable));
 
         List<Product> result = productService.getProducts(null);
 
@@ -114,36 +301,26 @@ class ProductServiceTest {
     @Test
     void getProductConfiguration_DataCorrect_ReturnsOptions() {
         UUID id = UUID.randomUUID();
-        Product product = Product.builder()
-                .id(id)
-                .name("ProBook X15")
-                .type(ProductType.COMPUTER)
-                .options(List.of(ProductOption.builder().name("Procesor").position(1).values(List.of("i5", "i7")).build()))
-                .build();
-        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(product));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existingLaptop(id, UUID.randomUUID())));
 
         List<ProductOption> result = productService.getProductConfiguration(id);
 
         assertAll(
                 () -> assertEquals(1, result.size()),
                 () -> assertEquals("Procesor", result.get(0).getName()),
-                () -> assertEquals(2, result.get(0).getValues().size())
+                () -> assertEquals(3, result.get(0).getValues().size())
         );
     }
 
     @Test
     void updateProduct_DataCorrect_ReturnsUpdatedProduct() {
         UUID id = UUID.randomUUID();
-        Product existing = Product.builder()
-                .id(id).name("Old name").type(ProductType.COMPUTER)
-                .basePrice(Money.of(new BigDecimal("3999.00"), "PLN"))
-                .build();
         UpdateProductCommand request = UpdateProductCommand.builder()
                 .name("New name").type(ProductType.COMPUTER).description("Updated")
                 .basePrice(Money.of(new BigDecimal("4999.00"), "PLN"))
                 .build();
-        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existing));
-        when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productRepositoryPort.findActiveByIdForUpdate(id))
+                .thenReturn(Optional.of(existingLaptop(id, UUID.randomUUID())));
 
         Product result = productService.updateProduct(id, request);
 
@@ -159,7 +336,7 @@ class ProductServiceTest {
     void updateProduct_ProductNotFound_ThrowsProductNotFoundException() {
         UUID id = UUID.randomUUID();
         UpdateProductCommand request = UpdateProductCommand.builder().name("New name").build();
-        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.empty());
+        when(productRepositoryPort.findActiveByIdForUpdate(id)).thenReturn(Optional.empty());
 
         ProductNotFoundException exception = Assertions.assertThrows(
                 ProductNotFoundException.class, () -> productService.updateProduct(id, request));
@@ -169,11 +346,112 @@ class ProductServiceTest {
     }
 
     @Test
+    void updateProduct_WithVariants_KeepsExistingVariantIdsAndAssignsNewOnes() {
+        UUID id = UUID.randomUUID();
+        UUID existingVariantId = UUID.randomUUID();
+        UpdateProductCommand request = UpdateProductCommand.builder()
+                .name("ProBook X15").type(ProductType.COMPUTER)
+                .variants(List.of(
+                        variant(existingVariantId, "PBX15-I7", Map.of("Procesor", "i7")),
+                        variant(null, "PBX15-I9", Map.of("Procesor", "i9"))))
+                .build();
+        when(productRepositoryPort.findActiveByIdForUpdate(id)).thenReturn(Optional.of(existingLaptop(id, existingVariantId)));
+
+        Product result = productService.updateProduct(id, request);
+
+        assertAll(
+                () -> assertEquals(2, result.getVariants().size()),
+                () -> assertEquals(existingVariantId, result.getVariants().get(0).getId()),
+                () -> assertNotNull(result.getVariants().get(1).getId())
+        );
+    }
+
+    @Test
+    void updateProduct_VariantOfAnotherProduct_ThrowsInvalidProductException() {
+        UUID id = UUID.randomUUID();
+        UUID foreignVariantId = UUID.randomUUID();
+        UpdateProductCommand request = UpdateProductCommand.builder()
+                .name("ProBook X15").type(ProductType.COMPUTER)
+                .variants(List.of(variant(foreignVariantId, "PBX15-I7", Map.of("Procesor", "i7"))))
+                .build();
+        when(productRepositoryPort.findActiveByIdForUpdate(id))
+                .thenReturn(Optional.of(existingLaptop(id, UUID.randomUUID())));
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.updateProduct(id, request));
+
+        assertEquals("Variant " + foreignVariantId + " does not belong to product " + id, exception.getMessage());
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void updateProduct_StockKeepingUnitUsedByOtherProduct_ThrowsStockKeepingUnitTakenException() {
+        UUID id = UUID.randomUUID();
+        UpdateProductCommand request = UpdateProductCommand.builder()
+                .name("ProBook X15").type(ProductType.COMPUTER)
+                .variants(List.of(variant(null, "HDMI-2M", Map.of("Procesor", "i5"))))
+                .build();
+        when(productRepositoryPort.findActiveByIdForUpdate(id))
+                .thenReturn(Optional.of(existingLaptop(id, UUID.randomUUID())));
+        when(productRepositoryPort.findStockKeepingUnitsUsedByOtherActiveProducts(anyCollection(), eq(id)))
+                .thenReturn(List.of("HDMI-2M"));
+
+        Assertions.assertThrows(StockKeepingUnitTakenException.class, () -> productService.updateProduct(id, request));
+
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void updateProduct_CollectionsNotProvided_KeepsExistingCollections() {
+        UUID id = UUID.randomUUID();
+        UpdateProductCommand request = UpdateProductCommand.builder()
+                .name("ProBook X15 Gen2").type(ProductType.COMPUTER).build();
+        when(productRepositoryPort.findActiveByIdForUpdate(id))
+                .thenReturn(Optional.of(existingLaptop(id, UUID.randomUUID())));
+
+        Product result = productService.updateProduct(id, request);
+
+        assertAll(
+                () -> assertEquals("ProBook X15 Gen2", result.getName()),
+                () -> assertEquals(1, result.getOptions().size()),
+                () -> assertEquals(1, result.getVariants().size())
+        );
+    }
+
+    @Test
+    void updateProduct_TypeChangedToElectronicsWithOptions_ThrowsInvalidProductException() {
+        UUID id = UUID.randomUUID();
+        UpdateProductCommand request = UpdateProductCommand.builder()
+                .name("ProBook X15").type(ProductType.ELECTRONICS).build();
+        when(productRepositoryPort.findActiveByIdForUpdate(id))
+                .thenReturn(Optional.of(existingLaptop(id, UUID.randomUUID())));
+
+        Assertions.assertThrows(InvalidProductException.class, () -> productService.updateProduct(id, request));
+
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void updateProduct_AddOnReferencesSameProduct_ThrowsInvalidAddOnException() {
+        UUID id = UUID.randomUUID();
+        UpdateProductCommand request = UpdateProductCommand.builder()
+                .name("ProBook X15").type(ProductType.COMPUTER)
+                .addOns(List.of(addOn(id))).build();
+        when(productRepositoryPort.findActiveByIdForUpdate(id))
+                .thenReturn(Optional.of(existingLaptop(id, UUID.randomUUID())));
+
+        InvalidAddOnException exception = Assertions.assertThrows(
+                InvalidAddOnException.class, () -> productService.updateProduct(id, request));
+
+        assertEquals(400, exception.getResponseCode());
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
     void archiveProduct_ActiveProduct_SetsArchiveDateAndRemovesItFromOtherProductsAddOns() {
         UUID id = UUID.randomUUID();
-        Product product = Product.builder().id(id).name("Kabel HDMI").type(ProductType.ELECTRONICS).build();
-        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(product));
-        when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Product product = existingLaptop(id, UUID.randomUUID());
+        when(productRepositoryPort.findActiveByIdForUpdate(id)).thenReturn(Optional.of(product));
 
         productService.archiveProduct(id);
 
@@ -185,7 +463,7 @@ class ProductServiceTest {
     @Test
     void archiveProduct_ProductNotFound_ThrowsProductNotFoundException() {
         UUID id = UUID.randomUUID();
-        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.empty());
+        when(productRepositoryPort.findActiveByIdForUpdate(id)).thenReturn(Optional.empty());
 
         ProductNotFoundException exception = Assertions.assertThrows(
                 ProductNotFoundException.class, () -> productService.archiveProduct(id));
@@ -227,125 +505,5 @@ class ProductServiceTest {
         long result = productService.deleteExpiredArchivedProducts();
 
         assertEquals(3, result);
-    }
-
-    private AddOn addOn(UUID addOnProductId) {
-        return AddOn.builder()
-                .productId(addOnProductId).name("Mysz")
-                .price(Money.of(new BigDecimal("99.00"), "PLN")).vatRate(VatRate.VAT_23).build();
-    }
-
-    private ProductVariant variant(UUID id, String stockKeepingUnit) {
-        return ProductVariant.builder()
-                .id(id).stockKeepingUnit(stockKeepingUnit)
-                .price(Money.of(new BigDecimal("4599.00"), "PLN"))
-                .availability(Availability.AVAILABLE).vatRate(VatRate.VAT_23).build();
-    }
-
-    @Test
-    void addProduct_AddOnProductExists_SavesProduct() {
-        UUID addOnProductId = UUID.randomUUID();
-        AddProductCommand command = AddProductCommand.builder()
-                .name("ProBook X15").type(ProductType.COMPUTER)
-                .addOns(List.of(addOn(addOnProductId))).build();
-        when(productRepositoryPort.existsActiveById(addOnProductId)).thenReturn(true);
-        when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        Product result = productService.addProduct(command);
-
-        assertEquals(addOnProductId, result.getAddOns().get(0).getProductId());
-    }
-
-    @Test
-    void addProduct_AddOnProductDoesNotExist_ThrowsInvalidAddOnException() {
-        UUID addOnProductId = UUID.randomUUID();
-        AddProductCommand command = AddProductCommand.builder()
-                .name("ProBook X15").type(ProductType.COMPUTER)
-                .addOns(List.of(addOn(addOnProductId))).build();
-        when(productRepositoryPort.existsActiveById(addOnProductId)).thenReturn(false);
-
-        InvalidAddOnException exception = Assertions.assertThrows(
-                InvalidAddOnException.class, () -> productService.addProduct(command));
-
-        assertAll(
-                () -> assertEquals(400, exception.getResponseCode()),
-                () -> assertEquals("Add-on product with id " + addOnProductId + " does not exist", exception.getMessage())
-        );
-        verify(productRepositoryPort, never()).save(any());
-    }
-
-    @Test
-    void addProduct_AddOnWithoutProductId_ThrowsInvalidAddOnException() {
-        AddProductCommand command = AddProductCommand.builder()
-                .name("ProBook X15").type(ProductType.COMPUTER)
-                .addOns(List.of(addOn(null))).build();
-
-        InvalidAddOnException exception = Assertions.assertThrows(
-                InvalidAddOnException.class, () -> productService.addProduct(command));
-
-        assertEquals(400, exception.getResponseCode());
-        verify(productRepositoryPort, never()).save(any());
-    }
-
-    @Test
-    void updateProduct_WithVariants_KeepsExistingVariantIdsAndAssignsNewOnes() {
-        UUID id = UUID.randomUUID();
-        UUID existingVariantId = UUID.randomUUID();
-        Product existing = Product.builder()
-                .id(id).name("ProBook X15").type(ProductType.COMPUTER)
-                .variants(new ArrayList<>(List.of(variant(existingVariantId, "PBX15-I7-16"))))
-                .build();
-        UpdateProductCommand request = UpdateProductCommand.builder()
-                .name("ProBook X15").type(ProductType.COMPUTER)
-                .variants(List.of(variant(existingVariantId, "PBX15-I7-16"), variant(null, "PBX15-I9-32")))
-                .build();
-        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existing));
-        when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        Product result = productService.updateProduct(id, request);
-
-        assertAll(
-                () -> assertEquals(2, result.getVariants().size()),
-                () -> assertEquals(existingVariantId, result.getVariants().get(0).getId()),
-                () -> assertNotNull(result.getVariants().get(1).getId())
-        );
-    }
-
-    @Test
-    void updateProduct_CollectionsNotProvided_KeepsExistingCollections() {
-        UUID id = UUID.randomUUID();
-        Product existing = Product.builder()
-                .id(id).name("ProBook X15").type(ProductType.COMPUTER)
-                .options(List.of(ProductOption.builder().name("RAM").position(1).values(List.of("16GB")).build()))
-                .variants(List.of(variant(UUID.randomUUID(), "PBX15-I7-16")))
-                .build();
-        UpdateProductCommand request = UpdateProductCommand.builder()
-                .name("ProBook X15 Gen2").type(ProductType.COMPUTER).build();
-        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existing));
-        when(productRepositoryPort.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        Product result = productService.updateProduct(id, request);
-
-        assertAll(
-                () -> assertEquals("ProBook X15 Gen2", result.getName()),
-                () -> assertEquals(1, result.getOptions().size()),
-                () -> assertEquals(1, result.getVariants().size())
-        );
-    }
-
-    @Test
-    void updateProduct_AddOnReferencesSameProduct_ThrowsInvalidAddOnException() {
-        UUID id = UUID.randomUUID();
-        Product existing = Product.builder().id(id).name("ProBook X15").type(ProductType.COMPUTER).build();
-        UpdateProductCommand request = UpdateProductCommand.builder()
-                .name("ProBook X15").type(ProductType.COMPUTER)
-                .addOns(List.of(addOn(id))).build();
-        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(existing));
-
-        InvalidAddOnException exception = Assertions.assertThrows(
-                InvalidAddOnException.class, () -> productService.updateProduct(id, request));
-
-        assertEquals(400, exception.getResponseCode());
-        verify(productRepositoryPort, never()).save(any());
     }
 }

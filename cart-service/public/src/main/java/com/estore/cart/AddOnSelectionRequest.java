@@ -1,6 +1,7 @@
 package com.estore.cart;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import lombok.*;
 
@@ -16,5 +17,6 @@ public class AddOnSelectionRequest {
     private UUID productId;
 
     @Positive
+    @Max(99)
     private int quantity;
 }

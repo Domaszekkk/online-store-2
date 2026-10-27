@@ -1,7 +1,9 @@
 package com.estore.order.order;
 
+import com.estore.order.ChangeOrderStatusRequest;
 import com.estore.order.DeliveryMethodDto;
 import com.estore.order.OrderDto;
+import com.estore.order.OrderPreviewDto;
 import com.estore.order.OrderService;
 import com.estore.order.PlaceOrderRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,6 +40,36 @@ public class OrderController {
     @ResponseStatus(HttpStatus.CREATED)
     public OrderDto placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
         return orderMapper.toDto(orderService.placeOrder(orderMapper.toCommand(request)));
+    }
+
+    @Operation(summary = "Preview an order",
+            description = "Validates the order data and returns its summary (lines, delivery cost, totals) "
+                    + "without placing the order; the cart stays open")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Order summary returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid order data"),
+            @ApiResponse(responseCode = "404", description = "Cart not found"),
+            @ApiResponse(responseCode = "409", description = "Cart is empty or an order was already placed from it"),
+            @ApiResponse(responseCode = "503", description = "Cart service is unavailable")
+    })
+    @PostMapping("/preview")
+    public OrderPreviewDto previewOrder(@Valid @RequestBody PlaceOrderRequest request) {
+        return orderMapper.toPreviewDto(orderService.previewOrder(orderMapper.toCommand(request)));
+    }
+
+    @Operation(summary = "Change order status",
+            description = "Moves the order on in processing: CONFIRMED to SHIPPED to COMPLETED, or cancels it (from NEW or CONFIRMED). "
+                    + "CONFIRMED is set automatically when the invoice or purchase confirmation is issued")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Status changed"),
+            @ApiResponse(responseCode = "400", description = "Missing or unknown status"),
+            @ApiResponse(responseCode = "404", description = "Order not found"),
+            @ApiResponse(responseCode = "409", description = "Status change not allowed from the current status")
+    })
+    @PatchMapping("/{id}/status")
+    public OrderDto changeOrderStatus(@Parameter(description = "Id of the order") @PathVariable UUID id,
+                                      @Valid @RequestBody ChangeOrderStatusRequest request) {
+        return orderMapper.toDto(orderService.changeOrderStatus(id, request.getStatus()));
     }
 
     @Operation(summary = "Get order by id", description = "Returns a single order identified by its id")

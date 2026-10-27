@@ -114,6 +114,8 @@ class GatewayIntegrationTest {
                     """);
         } else if (method.equals("GET") && path.equals("/orders/payment-methods")) {
             respond(exchange, 200, "[\"CARD\",\"BLIK\",\"TRANSFER\",\"CASH_ON_DELIVERY\"]");
+        } else if (method.equals("POST") && path.equals("/orders/preview")) {
+            respond(exchange, 200, previewBody());
         } else if (method.equals("POST") && path.equals("/orders") && body.contains(INVALID_TAX_IDENTIFICATION_NUMBER)) {
             respond(exchange, 400, "{\"message\":\"Validation failed: billingAddress.taxIdentificationNumber: "
                     + "must be 10 digits with a correct checksum\"}");
@@ -163,6 +165,19 @@ class GatewayIntegrationTest {
                 """.formatted(CART_ID, ITEM_ID, PRODUCT_ID, VARIANT_ID, ADD_ON_PRODUCT_ID);
     }
 
+    private static String previewBody() {
+        return """
+                {"customer":{"firstName":"Jan","lastName":"Kowalski","email":"jan.kowalski@example.com","phone":"+48 600 100 200"},
+                 "shippingAddress":{"street":"Marszałkowska 1","city":"Warszawa","postalCode":"00-001","country":"Polska"},
+                 "billingAddress":null,"paymentMethod":"BLIK","deliveryMethod":"PARCEL_LOCKER",
+                 "lines":[{"id":null,"productId":"%s","variantId":"%s","productName":"ProBook X15","stockKeepingUnit":"PBX15-16",
+                           "unitPrice":{"amount":4599.00,"currency":"PLN"},"vatRate":"VAT_23","quantity":1,"addOns":[],
+                           "lineTotal":{"amount":4599.00,"currency":"PLN"}}],
+                 "itemsTotal":{"amount":4599.00,"currency":"PLN"},"deliveryCost":{"amount":12.99,"currency":"PLN"},
+                 "grandTotal":{"amount":4611.99,"currency":"PLN"}}
+                """.formatted(PRODUCT_ID, VARIANT_ID);
+    }
+
     private static String orderBody() {
         return """
                 {"id":"%s","orderNumber":"ORD-2026-000001","cartId":"%s","status":"NEW",
@@ -176,7 +191,7 @@ class GatewayIntegrationTest {
                            "addOns":[{"productId":"%s","name":"Kabel HDMI 2m","price":{"amount":39.00,"currency":"PLN"},"vatRate":"VAT_23","quantity":1}],
                            "lineTotal":{"amount":4638.00,"currency":"PLN"}}],
                  "itemsTotal":{"amount":4638.00,"currency":"PLN"},"deliveryCost":{"amount":19.99,"currency":"PLN"},
-                 "grandTotal":{"amount":4657.99,"currency":"PLN"},"createdAt":"2026-10-22T10:02:00Z"}
+                 "grandTotal":{"amount":4657.99,"currency":"PLN"},"documentNumber":"FV/2026/10/000001","createdAt":"2026-10-22T10:02:00Z"}
                 """.formatted(ORDER_ID, CART_ID, UUID.randomUUID(), PRODUCT_ID, VARIANT_ID, ADD_ON_PRODUCT_ID);
     }
 
@@ -243,6 +258,16 @@ class GatewayIntegrationTest {
                 .andExpect(jsonPath("$.deliveryMethods[1].method").value("PARCEL_LOCKER"))
                 .andExpect(jsonPath("$.deliveryMethods[1].cost.amount").value(12.99));
 
+        mockMvc.perform(post("/shop/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(placeOrderBody("5260250274")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderNumber").doesNotExist())
+                .andExpect(jsonPath("$.deliveryCost.amount").value(12.99))
+                .andExpect(jsonPath("$.grandTotal.amount").value(4611.99))
+                .andExpect(jsonPath("$.lines[0].stockKeepingUnit").doesNotExist())
+                .andExpect(jsonPath("$.lines[0].vatRate").doesNotExist());
+
         mockMvc.perform(post("/shop/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(placeOrderBody("5260250274")))
@@ -283,6 +308,7 @@ class GatewayIntegrationTest {
 
         mockMvc.perform(get("/shop/orders/{id}", ORDER_ID))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentNumber").value("FV/2026/10/000001"))
                 .andExpect(jsonPath("$.cartId").doesNotExist())
                 .andExpect(jsonPath("$.lines[0].stockKeepingUnit").doesNotExist())
                 .andExpect(jsonPath("$.lines[0].vatRate").doesNotExist())

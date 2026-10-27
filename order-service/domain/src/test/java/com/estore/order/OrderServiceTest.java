@@ -26,7 +26,7 @@ import static org.mockito.Mockito.when;
 class OrderServiceTest {
 
     private OrderRepositoryPort orderRepositoryPort;
-    private CartCheckoutPort cartCheckoutPort;
+    private CartPort cartPort;
     private OrderEventPort orderEventPort;
     private TransactionPort transactionPort;
     private OrderService orderService;
@@ -34,10 +34,10 @@ class OrderServiceTest {
     @BeforeEach
     void setup() {
         this.orderRepositoryPort = Mockito.mock(OrderRepositoryPort.class);
-        this.cartCheckoutPort = Mockito.mock(CartCheckoutPort.class);
+        this.cartPort = Mockito.mock(CartPort.class);
         this.orderEventPort = Mockito.mock(OrderEventPort.class);
         this.transactionPort = Mockito.mock(TransactionPort.class);
-        this.orderService = new OrderService(orderRepositoryPort, cartCheckoutPort, orderEventPort, transactionPort);
+        this.orderService = new OrderService(orderRepositoryPort, cartPort, orderEventPort, transactionPort);
         when(transactionPort.inTransaction(any())).thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(0).get());
         when(orderRepositoryPort.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRepositoryPort.nextOrderSequenceNumber()).thenReturn(42L);
@@ -99,7 +99,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_DataCorrect_SnapshotsCartAndComputesTotals() {
         UUID cartId = UUID.randomUUID();
-        when(cartCheckoutPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.COURIER, null));
 
@@ -128,7 +128,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_NoBillingAddress_OrderHasNoBillingAddress() {
         UUID cartId = UUID.randomUUID();
-        when(cartCheckoutPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.COURIER, null));
 
@@ -138,7 +138,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_SeparateBillingAddress_KeepsBillingAddress() {
         UUID cartId = UUID.randomUUID();
-        when(cartCheckoutPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.COURIER, billingAddress("Firmowa 5", null, null)));
 
@@ -152,7 +152,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_CompanyBillingAddress_KeepsCompanyData() {
         UUID cartId = UUID.randomUUID();
-        when(cartCheckoutPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.COURIER,
                 billingAddress("Firmowa 5", "Kowalski Sp. z o.o.", "5260250274")));
@@ -173,7 +173,7 @@ class OrderServiceTest {
                         billingAddress("Firmowa 5", "Kowalski Sp. z o.o.", null))));
 
         assertEquals(400, exception.getResponseCode());
-        verify(cartCheckoutPort, never()).checkout(any());
+        verify(cartPort, never()).checkout(any());
         verify(orderRepositoryPort, never()).save(any());
     }
 
@@ -186,13 +186,13 @@ class OrderServiceTest {
                         billingAddress("Firmowa 5", "Kowalski Sp. z o.o.", "5260250275"))));
 
         assertEquals(400, exception.getResponseCode());
-        verify(cartCheckoutPort, never()).checkout(any());
+        verify(cartPort, never()).checkout(any());
     }
 
     @Test
     void placeOrder_Pickup_DeliveryIsFree() {
         UUID cartId = UUID.randomUUID();
-        when(cartCheckoutPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.PICKUP, null));
 
@@ -205,7 +205,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_CartEmpty_ThrowsCartNotOrderableExceptionAndSavesNothing() {
         UUID cartId = UUID.randomUUID();
-        when(cartCheckoutPort.checkout(cartId))
+        when(cartPort.checkout(cartId))
                 .thenReturn(CartDetails.builder().id(cartId).items(new ArrayList<>()).build());
 
         CartNotOrderableException exception = Assertions.assertThrows(CartNotOrderableException.class,
@@ -218,7 +218,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_CartServiceRejectsCheckout_PropagatesAndSavesNothing() {
         UUID cartId = UUID.randomUUID();
-        when(cartCheckoutPort.checkout(cartId))
+        when(cartPort.checkout(cartId))
                 .thenThrow(new CartNotOrderableException(cartId, "cart is already checked out"));
 
         CartNotOrderableException exception = Assertions.assertThrows(CartNotOrderableException.class,
@@ -243,7 +243,7 @@ class OrderServiceTest {
                 () -> assertEquals(409, exception.getResponseCode()),
                 () -> assertEquals("Order ORD-2026-000007 has already been placed from cart " + cartId, exception.getMessage())
         );
-        verify(cartCheckoutPort, never()).checkout(any());
+        verify(cartPort, never()).checkout(any());
         verify(orderRepositoryPort, never()).save(any());
     }
 
@@ -293,5 +293,151 @@ class OrderServiceTest {
     void getPaymentMethods_ReturnsAllMethods() {
         assertEquals(List.of(PaymentMethod.CARD, PaymentMethod.BLIK, PaymentMethod.TRANSFER, PaymentMethod.CASH_ON_DELIVERY),
                 orderService.getPaymentMethods());
+    }
+
+    private Order placedOrder(UUID orderId, OrderStatus status) {
+        return Order.builder().id(orderId).orderNumber("ORD-2026-000042").status(status).build();
+    }
+
+    @Test
+    void previewOrder_DataCorrect_ReturnsSummaryWithoutPlacingOrder() {
+        UUID cartId = UUID.randomUUID();
+        when(orderRepositoryPort.findByCartId(cartId)).thenReturn(Optional.empty());
+        when(cartPort.getCart(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+
+        Order result = orderService.previewOrder(command(cartId, DeliveryMethod.COURIER, null));
+
+        assertAll(
+                () -> assertNull(result.getId()),
+                () -> assertNull(result.getOrderNumber()),
+                () -> assertNull(result.getStatus()),
+                () -> assertEquals("Jan", result.getCustomer().getFirstName()),
+                () -> assertEquals(1, result.getLines().size()),
+                () -> assertAmount("9237.00", result.getItemsTotal()),
+                () -> assertAmount("19.99", result.getDeliveryCost()),
+                () -> assertAmount("9256.99", result.getGrandTotal())
+        );
+        verify(cartPort, never()).checkout(any());
+        verify(orderRepositoryPort, never()).save(any());
+        verify(orderEventPort, never()).orderPlaced(any());
+    }
+
+    @Test
+    void previewOrder_OrderAlreadyPlaced_ThrowsOrderAlreadyPlacedException() {
+        UUID cartId = UUID.randomUUID();
+        when(orderRepositoryPort.findByCartId(cartId))
+                .thenReturn(Optional.of(placedOrder(UUID.randomUUID(), OrderStatus.NEW)));
+
+        OrderAlreadyPlacedException exception = Assertions.assertThrows(OrderAlreadyPlacedException.class,
+                () -> orderService.previewOrder(command(cartId, DeliveryMethod.COURIER, null)));
+
+        assertEquals(409, exception.getResponseCode());
+        verify(cartPort, never()).getCart(any());
+    }
+
+    @Test
+    void previewOrder_InvalidTaxIdentificationNumber_ThrowsInvalidBillingAddressException() {
+        UUID cartId = UUID.randomUUID();
+        PlaceOrderCommand command = command(cartId, DeliveryMethod.COURIER,
+                billingAddress("Firmowa 5", "Kowalski Sp. z o.o.", "5260250275"));
+
+        Assertions.assertThrows(InvalidBillingAddressException.class, () -> orderService.previewOrder(command));
+
+        verify(cartPort, never()).getCart(any());
+    }
+
+    @Test
+    void previewOrder_EmptyCart_ThrowsCartNotOrderableException() {
+        UUID cartId = UUID.randomUUID();
+        when(orderRepositoryPort.findByCartId(cartId)).thenReturn(Optional.empty());
+        when(cartPort.getCart(cartId)).thenReturn(CartDetails.builder().id(cartId).items(new ArrayList<>()).build());
+
+        CartNotOrderableException exception = Assertions.assertThrows(CartNotOrderableException.class,
+                () -> orderService.previewOrder(command(cartId, DeliveryMethod.COURIER, null)));
+
+        assertEquals(409, exception.getResponseCode());
+    }
+
+    @Test
+    void confirmOrder_NewOrder_SetsConfirmedStatusAndDocumentNumber() {
+        UUID orderId = UUID.randomUUID();
+        when(orderRepositoryPort.findByIdForUpdate(orderId)).thenReturn(Optional.of(placedOrder(orderId, OrderStatus.NEW)));
+
+        Order result = orderService.confirmOrder(orderId, "FV/2026/10/000001");
+
+        assertAll(
+                () -> assertEquals(OrderStatus.CONFIRMED, result.getStatus()),
+                () -> assertEquals("FV/2026/10/000001", result.getDocumentNumber())
+        );
+        verify(orderRepositoryPort).save(result);
+    }
+
+    @Test
+    void confirmOrder_CancelledOrder_KeepsStatusAndStoresDocumentNumber() {
+        UUID orderId = UUID.randomUUID();
+        when(orderRepositoryPort.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(placedOrder(orderId, OrderStatus.CANCELLED)));
+
+        Order result = orderService.confirmOrder(orderId, "PZ/2026/10/000001");
+
+        assertAll(
+                () -> assertEquals(OrderStatus.CANCELLED, result.getStatus()),
+                () -> assertEquals("PZ/2026/10/000001", result.getDocumentNumber())
+        );
+    }
+
+    @Test
+    void confirmOrder_OrderNotFound_ThrowsOrderNotFoundException() {
+        UUID orderId = UUID.randomUUID();
+        when(orderRepositoryPort.findByIdForUpdate(orderId)).thenReturn(Optional.empty());
+
+        Assertions.assertThrows(OrderNotFoundException.class, () -> orderService.confirmOrder(orderId, "FV/2026/10/000001"));
+
+        verify(orderRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void changeOrderStatus_ConfirmedToShipped_ChangesStatus() {
+        UUID orderId = UUID.randomUUID();
+        when(orderRepositoryPort.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(placedOrder(orderId, OrderStatus.CONFIRMED)));
+
+        Order result = orderService.changeOrderStatus(orderId, OrderStatus.SHIPPED);
+
+        assertEquals(OrderStatus.SHIPPED, result.getStatus());
+    }
+
+    @Test
+    void changeOrderStatus_NewToShipped_ThrowsInvalidStatusChangeException() {
+        UUID orderId = UUID.randomUUID();
+        when(orderRepositoryPort.findByIdForUpdate(orderId)).thenReturn(Optional.of(placedOrder(orderId, OrderStatus.NEW)));
+
+        InvalidStatusChangeException exception = Assertions.assertThrows(InvalidStatusChangeException.class,
+                () -> orderService.changeOrderStatus(orderId, OrderStatus.SHIPPED));
+
+        assertAll(
+                () -> assertEquals(409, exception.getResponseCode()),
+                () -> assertEquals("Order " + orderId + " cannot change status from NEW to SHIPPED", exception.getMessage())
+        );
+        verify(orderRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void changeOrderStatus_ToConfirmedByHand_ThrowsInvalidStatusChangeException() {
+        UUID orderId = UUID.randomUUID();
+        when(orderRepositoryPort.findByIdForUpdate(orderId)).thenReturn(Optional.of(placedOrder(orderId, OrderStatus.NEW)));
+
+        Assertions.assertThrows(InvalidStatusChangeException.class,
+                () -> orderService.changeOrderStatus(orderId, OrderStatus.CONFIRMED));
+    }
+
+    @Test
+    void changeOrderStatus_CompletedOrderCancelled_ThrowsInvalidStatusChangeException() {
+        UUID orderId = UUID.randomUUID();
+        when(orderRepositoryPort.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(placedOrder(orderId, OrderStatus.COMPLETED)));
+
+        Assertions.assertThrows(InvalidStatusChangeException.class,
+                () -> orderService.changeOrderStatus(orderId, OrderStatus.CANCELLED));
     }
 }

@@ -76,10 +76,14 @@ public class ProductController {
         return productMapper.toOptionDtos(productService.getProductConfiguration(id));
     }
 
-    @Operation(summary = "Create a new product", description = "Creates a new product with its options, variants and add-ons")
+    @Operation(summary = "Create a new product",
+            description = "Creates a new product with its options, variants and add-ons; variant ids are assigned by the service. "
+                    + "ELECTRONICS has exactly one variant and no options or add-ons; in other types every variant "
+                    + "has one allowed value for each option")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Product created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid request or add-on referencing a non-existent product")
+            @ApiResponse(responseCode = "400", description = "Invalid request or add-on referencing a non-existent product"),
+            @ApiResponse(responseCode = "409", description = "Stock keeping unit already used by another product on sale")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -91,6 +95,7 @@ public class ProductController {
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Product updated successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid request or add-on referencing a non-existent product"),
+            @ApiResponse(responseCode = "409", description = "Stock keeping unit already used by another product on sale"),
             @ApiResponse(responseCode = "404", description = "Product not found")
     })
     @PutMapping("/{id}")

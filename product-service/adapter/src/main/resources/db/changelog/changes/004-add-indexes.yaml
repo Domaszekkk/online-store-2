@@ -1,0 +1,66 @@
+databaseChangeLog:
+  - changeSet:
+      id: 011-add-product-indexes
+      author: estore
+      comment: "Indexes for filtering products and for loading their collections by foreign key"
+      changes:
+        - createIndex:
+            tableName: products
+            indexName: idx_products_type
+            columns:
+              - column:
+                  name: type
+        - createIndex:
+            tableName: products
+            indexName: idx_products_archived_at
+            columns:
+              - column:
+                  name: archived_at
+        - createIndex:
+            tableName: product_attributes
+            indexName: idx_product_attributes_product_id
+            columns:
+              - column:
+                  name: product_id
+        - createIndex:
+            tableName: product_options
+            indexName: idx_product_options_product_id
+            columns:
+              - column:
+                  name: product_id
+        - createIndex:
+            tableName: product_option_values
+            indexName: idx_product_option_values_option_id
+            columns:
+              - column:
+                  name: option_id
+        - createIndex:
+            tableName: product_variants
+            indexName: idx_product_variants_product_id
+            columns:
+              - column:
+                  name: product_id
+        - createIndex:
+            tableName: product_variants
+            indexName: idx_product_variants_stock_keeping_unit
+            columns:
+              - column:
+                  name: stock_keeping_unit
+        - createIndex:
+            tableName: product_variant_option_values
+            indexName: idx_product_variant_option_values_variant_id
+            columns:
+              - column:
+                  name: variant_id
+        - createIndex:
+            tableName: add_ons
+            indexName: idx_add_ons_product_id
+            columns:
+              - column:
+                  name: product_id
+        - createIndex:
+            tableName: add_ons
+            indexName: idx_add_ons_product_ref_id
+            columns:
+              - column:
+                  name: product_ref_id

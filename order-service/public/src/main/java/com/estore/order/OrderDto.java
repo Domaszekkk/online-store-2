@@ -25,5 +25,6 @@ public class OrderDto {
     private MoneyDto itemsTotal;
     private MoneyDto deliveryCost;
     private MoneyDto grandTotal;
+    private String documentNumber;
     private Instant createdAt;
 }

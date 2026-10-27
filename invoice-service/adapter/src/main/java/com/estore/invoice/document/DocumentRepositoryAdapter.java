@@ -22,7 +22,6 @@ public class DocumentRepositoryAdapter implements DocumentRepositoryPort {
         DocumentEntity saved = documentJpaRepository.save(documentMapper.toEntity(document));
         documentPdfJpaRepository.save(DocumentPdfEntity.builder()
                 .documentId(saved.getId())
-                .orderId(saved.getOrderId())
                 .content(pdfContent)
                 .build());
         return documentMapper.toModel(saved);
@@ -36,7 +35,7 @@ public class DocumentRepositoryAdapter implements DocumentRepositoryPort {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<byte[]> findPdfByOrderId(UUID orderId) {
-        return documentPdfJpaRepository.findByOrderId(orderId).map(DocumentPdfEntity::getContent);
+    public Optional<byte[]> findPdfByDocumentId(UUID documentId) {
+        return documentPdfJpaRepository.findById(documentId).map(DocumentPdfEntity::getContent);
     }
 }

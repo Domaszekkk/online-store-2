@@ -14,7 +14,7 @@ assert {
   res.status: eq 200
   res.body.id: eq {{temporaryProductId}}
   res.body.name: eq Ksiazka testowa - wydanie 2
-  res.body.variants[0].stockKeepingUnit: eq BOOK-1
+  res.body.variants[0].stockKeepingUnit: eq BOOK-1-{{runId}}
   res.body.archivedAt: isString
 }
 

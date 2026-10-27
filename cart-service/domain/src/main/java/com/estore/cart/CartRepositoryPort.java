@@ -7,4 +7,6 @@ public interface CartRepositoryPort {
     Cart save(Cart cart);
 
     Optional<Cart> findById(UUID id);
+
+    Optional<Cart> findByIdForUpdate(UUID id);
 }

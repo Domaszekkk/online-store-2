@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
         "spring.cloud.openfeign.client.config.cart-service.read-timeout=500"
 })
 @Import(TestcontainersConfiguration.class)
-class CartCheckoutAdapterTest {
+class CartAdapterTest {
 
     private static final UUID CART_ID = UUID.randomUUID();
     private static final UUID EMPTY_CART_ID = UUID.randomUUID();
@@ -45,7 +45,7 @@ class CartCheckoutAdapterTest {
     private static final HttpServer CART_SERVICE_STUB = startCartServiceStub();
 
     @Autowired
-    private CartCheckoutPort cartCheckoutPort;
+    private CartPort cartPort;
 
     @DynamicPropertySource
     static void cartServiceUrl(DynamicPropertyRegistry registry) {
@@ -60,7 +60,7 @@ class CartCheckoutAdapterTest {
     private static HttpServer startCartServiceStub() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-            server.createContext("/carts/", CartCheckoutAdapterTest::handle);
+            server.createContext("/carts/", CartAdapterTest::handle);
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();
             return server;
@@ -73,7 +73,13 @@ class CartCheckoutAdapterTest {
         String path = exchange.getRequestURI().getPath();
         int callNumber = CALLS_PER_PATH.computeIfAbsent(path, key -> new AtomicInteger()).incrementAndGet();
 
-        if (!"POST".equals(exchange.getRequestMethod())) {
+        if ("GET".equals(exchange.getRequestMethod())) {
+            if (path.equals("/carts/" + MISSING_CART_ID)) {
+                respond(exchange, 404, "{\"message\":\"Cart with id " + MISSING_CART_ID + " not found\"}");
+            } else {
+                respond(exchange, 200, cartBody(UUID.fromString(path.split("/")[2])));
+            }
+        } else if (!"POST".equals(exchange.getRequestMethod())) {
             respond(exchange, 405, "{\"message\":\"method not allowed\"}");
         } else if (path.equals(checkoutPath(MISSING_CART_ID))) {
             respond(exchange, 404, "{\"message\":\"Cart with id " + MISSING_CART_ID + " not found\"}");
@@ -132,7 +138,7 @@ class CartCheckoutAdapterTest {
 
     @Test
     void checkout_CartWithItems_MapsResponse() {
-        CartDetails result = cartCheckoutPort.checkout(CART_ID);
+        CartDetails result = cartPort.checkout(CART_ID);
 
         CartItemDetails item = result.getItems().get(0);
         assertAll(
@@ -150,7 +156,7 @@ class CartCheckoutAdapterTest {
     @Test
     void checkout_EmptyCart_ThrowsConflictWithCartServiceReasonWithoutRetry() {
         CartNotOrderableException exception = Assertions.assertThrows(CartNotOrderableException.class,
-                () -> cartCheckoutPort.checkout(EMPTY_CART_ID));
+                () -> cartPort.checkout(EMPTY_CART_ID));
 
         assertAll(
                 () -> assertEquals(409, exception.getResponseCode()),
@@ -163,7 +169,7 @@ class CartCheckoutAdapterTest {
     @Test
     void checkout_CartNotFound_ThrowsCartNotFoundExceptionWithoutRetry() {
         CartNotFoundException exception = Assertions.assertThrows(CartNotFoundException.class,
-                () -> cartCheckoutPort.checkout(MISSING_CART_ID));
+                () -> cartPort.checkout(MISSING_CART_ID));
 
         assertAll(
                 () -> assertEquals(404, exception.getResponseCode()),
@@ -173,7 +179,7 @@ class CartCheckoutAdapterTest {
 
     @Test
     void checkout_ServerErrorOnce_IsRetriedAndReturnsCart() {
-        CartDetails result = cartCheckoutPort.checkout(FLAKY_CART_ID);
+        CartDetails result = cartPort.checkout(FLAKY_CART_ID);
 
         assertAll(
                 () -> assertEquals(FLAKY_CART_ID, result.getId()),
@@ -183,7 +189,7 @@ class CartCheckoutAdapterTest {
 
     @Test
     void checkout_FirstResponseTooSlow_IsRetriedAndReturnsCart() {
-        CartDetails result = cartCheckoutPort.checkout(SLOW_CART_ID);
+        CartDetails result = cartPort.checkout(SLOW_CART_ID);
 
         assertAll(
                 () -> assertEquals(SLOW_CART_ID, result.getId()),
@@ -194,11 +200,32 @@ class CartCheckoutAdapterTest {
     @Test
     void checkout_ServerKeepsFailing_ThrowsUnavailableAfterMaxAttempts() {
         CartServiceUnavailableException exception = Assertions.assertThrows(CartServiceUnavailableException.class,
-                () -> cartCheckoutPort.checkout(FAILING_CART_ID));
+                () -> cartPort.checkout(FAILING_CART_ID));
 
         assertAll(
                 () -> assertEquals(503, exception.getResponseCode()),
                 () -> assertEquals(3, callsFor(FAILING_CART_ID))
         );
+    }
+
+    @Test
+    void getCart_CartWithItems_MapsResponse() {
+        UUID cartId = UUID.randomUUID();
+
+        CartDetails result = cartPort.getCart(cartId);
+
+        assertAll(
+                () -> assertEquals(cartId, result.getId()),
+                () -> assertEquals(2, result.getItems().get(0).getQuantity()),
+                () -> assertEquals("Kabel HDMI 2m", result.getItems().get(0).getAddOns().get(0).getName())
+        );
+    }
+
+    @Test
+    void getCart_CartNotFound_ThrowsCartNotFoundException() {
+        CartNotFoundException exception = Assertions.assertThrows(CartNotFoundException.class,
+                () -> cartPort.getCart(MISSING_CART_ID));
+
+        assertEquals(404, exception.getResponseCode());
     }
 }

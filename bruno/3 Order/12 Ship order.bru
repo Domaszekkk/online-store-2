@@ -1,0 +1,31 @@
+meta {
+  name: 12 Ship order
+  type: http
+  seq: 12
+}
+
+patch {
+  url: {{orderServiceUrl}}/orders/{{orderId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "SHIPPED"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq SHIPPED
+}
+
+docs {
+  Store staff move the order on: CONFIRMED -> SHIPPED -> COMPLETED; NEW or CONFIRMED can be CANCELLED.
+  Not available in the gateway, it is not a part of the sales process of the customer.
+}

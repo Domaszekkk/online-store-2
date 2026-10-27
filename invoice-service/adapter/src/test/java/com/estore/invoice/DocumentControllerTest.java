@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -63,7 +64,7 @@ class DocumentControllerTest {
     void getPdf_DocumentExists_ReturnsPdfInline() throws Exception {
         UUID orderId = UUID.randomUUID();
         when(documentService.getDocumentByOrderId(orderId)).thenReturn(invoice(orderId));
-        when(documentService.getPdfByOrderId(orderId)).thenReturn(PDF);
+        when(documentService.getPdf(any())).thenReturn(PDF);
 
         mockMvc.perform(get("/documents/order/{orderId}", orderId))
                 .andExpect(status().isOk())

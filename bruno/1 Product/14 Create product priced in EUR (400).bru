@@ -1,0 +1,35 @@
+meta {
+  name: 14 Create product priced in EUR (400)
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{productServiceUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Kabel USB-C",
+    "type": "ELECTRONICS",
+    "basePrice": { "amount": 9.00, "currency": "EUR" },
+    "variants": [
+      { "stockKeepingUnit": "USBC-{{runId}}", "price": { "amount": 9.00, "currency": "EUR" }, "availability": "AVAILABLE", "vatRate": "VAT_23" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: contains must be PLN, the only currency of the shop
+}
+
+docs {
+  The shop sells only in PLN; cart, order and invoice compute totals in PLN.
+}

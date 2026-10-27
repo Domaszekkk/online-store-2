@@ -33,13 +33,13 @@ public class Order {
     private Money itemsTotal;
     private Money deliveryCost;
     private Money grandTotal;
+    private String documentNumber;
     private Instant createdAt;
 
-    public static Order place(PlaceOrderCommand command, CartDetails cart, long sequenceNumber) {
+    public static Order preview(PlaceOrderCommand command, CartDetails cart) {
         if (cart.getItems() == null || cart.getItems().isEmpty()) {
             throw new CartNotOrderableException(cart.getId(), "cart is empty");
         }
-        Instant now = Instant.now();
         List<OrderLine> lines = new ArrayList<>(cart.getItems().stream().map(OrderLine::fromCartItem).toList());
         Money itemsTotal = lines.stream()
                 .map(OrderLine::getLineTotal)
@@ -47,10 +47,7 @@ public class Order {
         Money deliveryCost = command.getDeliveryMethod().cost();
 
         return Order.builder()
-                .id(UUID.randomUUID())
-                .orderNumber(formatOrderNumber(now, sequenceNumber))
                 .cartId(cart.getId())
-                .status(OrderStatus.NEW)
                 .customer(command.getCustomer())
                 .shippingAddress(command.getShippingAddress())
                 .billingAddress(command.getBillingAddress())
@@ -60,8 +57,31 @@ public class Order {
                 .itemsTotal(itemsTotal)
                 .deliveryCost(deliveryCost)
                 .grandTotal(itemsTotal.add(deliveryCost))
-                .createdAt(now)
                 .build();
+    }
+
+    public static Order place(PlaceOrderCommand command, CartDetails cart, long sequenceNumber) {
+        Order order = preview(command, cart);
+        Instant now = Instant.now();
+        order.id = UUID.randomUUID();
+        order.orderNumber = formatOrderNumber(now, sequenceNumber);
+        order.status = OrderStatus.NEW;
+        order.createdAt = now;
+        return order;
+    }
+
+    public void confirm(String documentNumber) {
+        this.documentNumber = documentNumber;
+        if (status == OrderStatus.NEW) {
+            this.status = OrderStatus.CONFIRMED;
+        }
+    }
+
+    public void changeStatus(OrderStatus targetStatus) {
+        if (targetStatus == OrderStatus.CONFIRMED || !status.canChangeTo(targetStatus)) {
+            throw new InvalidStatusChangeException(id, status, targetStatus);
+        }
+        this.status = targetStatus;
     }
 
     static String formatOrderNumber(Instant placedAt, long sequenceNumber) {

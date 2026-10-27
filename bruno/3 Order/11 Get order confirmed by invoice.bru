@@ -1,0 +1,27 @@
+meta {
+  name: 11 Get order confirmed by invoice
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{orderServiceUrl}}/orders/{{orderId}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  await new Promise(resolve => setTimeout(resolve, 3000));
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq CONFIRMED
+  res.body.documentNumber: startsWith FV/
+}
+
+docs {
+  Order processing: invoice-service issues the invoice and sends DocumentIssued through Kafka,
+  order-service then moves the order from NEW to CONFIRMED and stores the document number.
+  Waits 3 seconds, because both events go through outboxes published every second.
+}

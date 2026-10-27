@@ -1,6 +1,6 @@
 package com.estore.order.order;
 
-import com.estore.order.CartCheckoutPort;
+import com.estore.order.CartPort;
 import com.estore.order.OrderEventPort;
 import com.estore.order.OrderRepositoryPort;
 import com.estore.order.OrderService;
@@ -13,9 +13,9 @@ public class OrderServiceConfig {
 
     @Bean
     public OrderService orderService(OrderRepositoryPort orderRepositoryPort,
-                                     CartCheckoutPort cartCheckoutPort,
+                                     CartPort cartPort,
                                      OrderEventPort orderEventPort,
                                      TransactionPort transactionPort) {
-        return new OrderService(orderRepositoryPort, cartCheckoutPort, orderEventPort, transactionPort);
+        return new OrderService(orderRepositoryPort, cartPort, orderEventPort, transactionPort);
     }
 }

@@ -18,9 +18,6 @@ public class DocumentPdfEntity {
     @Column(name = "document_id")
     private UUID documentId;
 
-    @Column(name = "order_id", unique = true)
-    private UUID orderId;
-
     @Column(name = "content", columnDefinition = "bytea")
     private byte[] content;
 }

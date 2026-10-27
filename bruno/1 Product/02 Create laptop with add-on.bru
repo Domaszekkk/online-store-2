@@ -26,8 +26,8 @@ body:json {
       { "name": "RAM", "position": 2, "values": ["8GB", "16GB", "32GB"] }
     ],
     "variants": [
-      { "stockKeepingUnit": "PBX15-I7-16", "optionValues": { "Procesor": "i7", "RAM": "16GB" }, "price": { "amount": 4599.00, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_23" },
-      { "stockKeepingUnit": "PBX15-I9-32", "optionValues": { "Procesor": "i9", "RAM": "32GB" }, "price": { "amount": 5799.00, "currency": "PLN" }, "availability": "COMING_SOON", "vatRate": "VAT_23" }
+      { "stockKeepingUnit": "PBX15-I7-16-{{runId}}", "optionValues": { "Procesor": "i7", "RAM": "16GB" }, "price": { "amount": 4599.00, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_23" },
+      { "stockKeepingUnit": "PBX15-I9-32-{{runId}}", "optionValues": { "Procesor": "i9", "RAM": "32GB" }, "price": { "amount": 5799.00, "currency": "PLN" }, "availability": "COMING_SOON", "vatRate": "VAT_23" }
     ],
     "addOns": [
       { "productId": "{{addOnProductId}}", "name": "Kabel HDMI 2m", "price": { "amount": 39.00, "currency": "PLN" }, "vatRate": "VAT_8" }

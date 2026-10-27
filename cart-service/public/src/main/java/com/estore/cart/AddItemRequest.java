@@ -2,6 +2,7 @@ package com.estore.cart;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import lombok.*;
 
@@ -22,9 +23,9 @@ public class AddItemRequest {
     private UUID variantId;
 
     @Positive
+    @Max(99)
     private int quantity;
 
-    @Valid
     @Builder.Default
-    private List<@NotNull AddOnSelectionRequest> addOns = new ArrayList<>();
+    private List<@Valid @NotNull AddOnSelectionRequest> addOns = new ArrayList<>();
 }

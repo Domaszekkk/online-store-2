@@ -35,6 +35,7 @@ class DocumentServiceTest {
     private DocumentRepositoryPort documentRepositoryPort;
     private DocumentNumberPort documentNumberPort;
     private PdfRendererPort pdfRendererPort;
+    private DocumentEventPort documentEventPort;
     private DocumentService documentService;
 
     @BeforeEach
@@ -42,9 +43,10 @@ class DocumentServiceTest {
         this.documentRepositoryPort = Mockito.mock(DocumentRepositoryPort.class);
         this.documentNumberPort = Mockito.mock(DocumentNumberPort.class);
         this.pdfRendererPort = Mockito.mock(PdfRendererPort.class);
+        this.documentEventPort = Mockito.mock(DocumentEventPort.class);
         Seller seller = Seller.builder().name("E-Store Sp. z o.o.").taxIdentificationNumber("7010000000").build();
         this.documentService = new DocumentService(documentRepositoryPort, documentNumberPort, pdfRendererPort,
-                seller, Clock.fixed(NOW, ZoneOffset.UTC));
+                documentEventPort, seller, Clock.fixed(NOW, ZoneOffset.UTC));
         when(documentRepositoryPort.findByOrderId(any())).thenReturn(Optional.empty());
         when(documentNumberPort.nextSequenceNumber(any(), any())).thenReturn(7L);
         when(pdfRendererPort.render(any())).thenReturn(PDF);
@@ -125,6 +127,7 @@ class DocumentServiceTest {
         );
         verify(documentNumberPort).nextSequenceNumber(DocumentType.INVOICE, YearMonth.of(2026, 10));
         verify(documentRepositoryPort).save(result, PDF);
+        verify(documentEventPort).documentIssued(result);
     }
 
     @Test
@@ -171,25 +174,25 @@ class DocumentServiceTest {
         Document result = documentService.issue(command);
 
         assertSame(existing, result);
-        verifyNoInteractions(documentNumberPort, pdfRendererPort);
+        verifyNoInteractions(documentNumberPort, pdfRendererPort, documentEventPort);
         verify(documentRepositoryPort, never()).save(any(), any());
     }
 
     @Test
-    void getPdfByOrderId_DocumentExists_ReturnsPdf() {
-        UUID orderId = UUID.randomUUID();
-        when(documentRepositoryPort.findPdfByOrderId(orderId)).thenReturn(Optional.of(PDF));
+    void getPdf_DocumentExists_ReturnsPdf() {
+        Document document = Document.builder().id(UUID.randomUUID()).orderId(UUID.randomUUID()).build();
+        when(documentRepositoryPort.findPdfByDocumentId(document.getId())).thenReturn(Optional.of(PDF));
 
-        assertArrayEquals(PDF, documentService.getPdfByOrderId(orderId));
+        assertArrayEquals(PDF, documentService.getPdf(document));
     }
 
     @Test
-    void getPdfByOrderId_NoDocument_ThrowsDocumentNotFoundException() {
-        UUID orderId = UUID.randomUUID();
-        when(documentRepositoryPort.findPdfByOrderId(eq(orderId))).thenReturn(Optional.empty());
+    void getPdf_NoPdf_ThrowsDocumentNotFoundException() {
+        Document document = Document.builder().id(UUID.randomUUID()).orderId(UUID.randomUUID()).build();
+        when(documentRepositoryPort.findPdfByDocumentId(eq(document.getId()))).thenReturn(Optional.empty());
 
         DocumentNotFoundException exception = Assertions.assertThrows(DocumentNotFoundException.class,
-                () -> documentService.getPdfByOrderId(orderId));
+                () -> documentService.getPdf(document));
 
         assertEquals(404, exception.getResponseCode());
     }

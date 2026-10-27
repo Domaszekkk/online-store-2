@@ -228,4 +228,37 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.deliveryMethods[0].cost.amount").value(19.99))
                 .andExpect(jsonPath("$.deliveryMethods[1].cost.amount").value(0.00));
     }
+
+    @Test
+    void previewOrder_DataCorrect_Returns200WithSummary() throws Exception {
+        Order order = sampleOrder(UUID.randomUUID());
+        when(shopService.previewOrder(any(PlaceOrderCommand.class))).thenReturn(OrderPreview.builder()
+                .customer(order.getCustomer())
+                .shippingAddress(order.getShippingAddress())
+                .paymentMethod("BLIK")
+                .deliveryMethod("COURIER")
+                .lines(order.getLines())
+                .itemsTotal(order.getItemsTotal())
+                .deliveryCost(order.getDeliveryCost())
+                .grandTotal(order.getGrandTotal())
+                .build());
+
+        mockMvc.perform(post("/shop/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ORDER_WITHOUT_INVOICE.formatted(UUID.randomUUID())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").doesNotExist())
+                .andExpect(jsonPath("$.customer.firstName").value("Jan"))
+                .andExpect(jsonPath("$.deliveryMethod").value("COURIER"))
+                .andExpect(jsonPath("$.grandTotal.amount").value(order.getGrandTotal().amount().doubleValue()));
+    }
+
+    @Test
+    void previewOrder_EmptyBody_Returns400() throws Exception {
+        mockMvc.perform(post("/shop/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(shopService);
+    }
 }

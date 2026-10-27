@@ -1,5 +1,6 @@
 package com.estore.invoice.document;
 
+import com.estore.invoice.DocumentEventPort;
 import com.estore.invoice.DocumentNumberPort;
 import com.estore.invoice.DocumentRepositoryPort;
 import com.estore.invoice.DocumentService;
@@ -21,9 +22,10 @@ public class DocumentServiceConfig {
     public DocumentService documentService(DocumentRepositoryPort documentRepositoryPort,
                                            DocumentNumberPort documentNumberPort,
                                            PdfRendererPort pdfRendererPort,
+                                           DocumentEventPort documentEventPort,
                                            SellerProperties sellerProperties,
                                            Clock clock) {
         return new DocumentService(documentRepositoryPort, documentNumberPort, pdfRendererPort,
-                sellerProperties.toSeller(), clock);
+                documentEventPort, sellerProperties.toSeller(), clock);
     }
 }

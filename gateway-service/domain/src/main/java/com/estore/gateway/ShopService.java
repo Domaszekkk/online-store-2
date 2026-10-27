@@ -48,6 +48,10 @@ public class ShopService {
                 .build();
     }
 
+    public OrderPreview previewOrder(PlaceOrderCommand command) {
+        return orderPort.previewOrder(command);
+    }
+
     public Order placeOrder(PlaceOrderCommand command) {
         return orderPort.placeOrder(command);
     }

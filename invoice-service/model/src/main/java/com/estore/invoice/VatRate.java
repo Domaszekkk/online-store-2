@@ -17,10 +17,6 @@ public enum VatRate {
         this.percentage = percentage;
     }
 
-    public BigDecimal getPercentage() {
-        return percentage;
-    }
-
     public Money netFromGross(Money gross) {
         BigDecimal net = gross.amount()
                 .multiply(ONE_HUNDRED)

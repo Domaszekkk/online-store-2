@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,7 +32,11 @@ class CartServiceTest {
     void setup() {
         this.cartRepositoryPort = Mockito.mock(CartRepositoryPort.class);
         this.productCatalogPort = Mockito.mock(ProductCatalogPort.class);
-        this.cartService = new CartService(cartRepositoryPort, productCatalogPort);
+        TransactionPort transactionPort = Mockito.mock(TransactionPort.class);
+        when(transactionPort.inTransaction(any())).thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(0).get());
+        when(cartRepositoryPort.findByIdForUpdate(any()))
+                .thenAnswer(invocation -> cartRepositoryPort.findById(invocation.getArgument(0)));
+        this.cartService = new CartService(cartRepositoryPort, productCatalogPort, transactionPort);
     }
 
     private Cart emptyCart(UUID id) {
@@ -171,6 +176,43 @@ class CartServiceTest {
                 () -> assertEquals(1, result.getItems().size()),
                 () -> assertEquals(2, result.getItems().get(0).getQuantity()),
                 () -> assertAmount("9198.00", result.getTotal())
+        );
+    }
+
+    @Test
+    void addItem_QuantityAboveLimit_ThrowsInvalidQuantityException() {
+        AddItemCommand command = AddItemCommand.builder()
+                .productId(UUID.randomUUID()).variantId(UUID.randomUUID()).quantity(100).build();
+
+        InvalidQuantityException exception = Assertions.assertThrows(
+                InvalidQuantityException.class, () -> cartService.addItem(UUID.randomUUID(), command));
+
+        assertAll(
+                () -> assertEquals(400, exception.getResponseCode()),
+                () -> assertEquals("Quantity must be between 1 and 99, but was 100", exception.getMessage())
+        );
+        verify(cartRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void addItem_SameConfigurationAboveLimitInTotal_ThrowsInvalidQuantityException() {
+        UUID cartId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(cartRepositoryPort.findById(cartId)).thenReturn(Optional.of(emptyCart(cartId)));
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+        when(cartRepositoryPort.save(any(Cart.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        AddItemCommand command = AddItemCommand.builder()
+                .productId(productId).variantId(variantId).quantity(60).build();
+        Cart cart = cartService.addItem(cartId, command);
+        when(cartRepositoryPort.findById(cartId)).thenReturn(Optional.of(cart));
+
+        InvalidQuantityException exception = Assertions.assertThrows(
+                InvalidQuantityException.class, () -> cartService.addItem(cartId, command));
+
+        assertAll(
+                () -> assertEquals("Quantity must be between 1 and 99, but was 120", exception.getMessage()),
+                () -> assertEquals(60, cart.getItems().get(0).getQuantity())
         );
     }
 

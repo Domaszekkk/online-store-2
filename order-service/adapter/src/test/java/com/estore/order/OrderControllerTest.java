@@ -23,6 +23,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -286,5 +287,73 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0]").value("CARD"))
                 .andExpect(jsonPath("$[1]").value("BLIK"));
+    }
+
+    @Test
+    void previewOrder_DataCorrect_Returns200WithSummaryWithoutOrderNumber() throws Exception {
+        Order preview = sampleOrder(null);
+        preview.setOrderNumber(null);
+        preview.setStatus(null);
+        when(orderService.previewOrder(any(PlaceOrderCommand.class))).thenReturn(preview);
+
+        mockMvc.perform(post("/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY.formatted(UUID.randomUUID())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderNumber").doesNotExist())
+                .andExpect(jsonPath("$.customer.firstName").value("Jan"))
+                .andExpect(jsonPath("$.deliveryMethod").value("COURIER"))
+                .andExpect(jsonPath("$.lines[0].quantity").value(2))
+                .andExpect(jsonPath("$.deliveryCost.amount").value(19.99))
+                .andExpect(jsonPath("$.grandTotal.amount").value(9256.99));
+    }
+
+    @Test
+    void previewOrder_EmptyBody_Returns400() throws Exception {
+        mockMvc.perform(post("/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(startsWith("Validation failed")));
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void changeOrderStatus_AllowedChange_Returns200() throws Exception {
+        UUID id = UUID.randomUUID();
+        Order order = sampleOrder(id);
+        order.setStatus(OrderStatus.SHIPPED);
+        order.setDocumentNumber("FV/2026/10/000001");
+        when(orderService.changeOrderStatus(id, OrderStatus.SHIPPED)).thenReturn(order);
+
+        mockMvc.perform(patch("/orders/{id}/status", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SHIPPED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SHIPPED"))
+                .andExpect(jsonPath("$.documentNumber").value("FV/2026/10/000001"));
+    }
+
+    @Test
+    void changeOrderStatus_NotAllowedChange_Returns409() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(orderService.changeOrderStatus(id, OrderStatus.SHIPPED))
+                .thenThrow(new InvalidStatusChangeException(id, OrderStatus.NEW, OrderStatus.SHIPPED));
+
+        mockMvc.perform(patch("/orders/{id}/status", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SHIPPED\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Order " + id + " cannot change status from NEW to SHIPPED"));
+    }
+
+    @Test
+    void changeOrderStatus_MissingStatus_Returns400() throws Exception {
+        mockMvc.perform(patch("/orders/{id}/status", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed: status: must not be null"));
+        verifyNoInteractions(orderService);
     }
 }

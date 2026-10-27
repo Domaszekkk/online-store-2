@@ -3,6 +3,7 @@ package com.estore.gateway.order;
 import com.estore.gateway.DeliveryOption;
 import com.estore.gateway.Order;
 import com.estore.gateway.OrderPort;
+import com.estore.gateway.OrderPreview;
 import com.estore.gateway.PlaceOrderCommand;
 import com.estore.gateway.client.RemoteServiceCalls;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,12 @@ public class OrderAdapter implements OrderPort {
     private final OrderClient orderClient;
     private final OrderMapper orderMapper;
     private final RemoteServiceCalls remoteServiceCalls;
+
+    @Override
+    public OrderPreview previewOrder(PlaceOrderCommand command) {
+        PlaceOrderPayload payload = orderMapper.toPayload(command);
+        return orderMapper.toPreview(remoteServiceCalls.call(SERVICE_NAME, () -> orderClient.previewOrder(payload)));
+    }
 
     @Override
     public Order placeOrder(PlaceOrderCommand command) {

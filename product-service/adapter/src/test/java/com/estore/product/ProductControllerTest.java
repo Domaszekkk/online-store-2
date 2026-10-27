@@ -261,4 +261,37 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Malformed request body")));
         org.mockito.Mockito.verifyNoInteractions(productService);
     }
+
+    @Test
+    void addProduct_StockKeepingUnitTaken_Returns409() throws Exception {
+        AddProductCommand command = AddProductCommand.builder()
+                .name("ProBook X15").type(ProductType.COMPUTER)
+                .basePrice(Money.of(new BigDecimal("3999.00"), "PLN"))
+                .build();
+        when(productService.addProduct(any(AddProductCommand.class)))
+                .thenThrow(new StockKeepingUnitTakenException(List.of("PBX15-I7-16")));
+
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(command)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message")
+                        .value("Stock keeping units [PBX15-I7-16] are already used by another product on sale"));
+    }
+
+    @Test
+    void addProduct_ElectronicsWithOptions_Returns400() throws Exception {
+        AddProductCommand command = AddProductCommand.builder()
+                .name("Kabel HDMI").type(ProductType.ELECTRONICS)
+                .basePrice(Money.of(new BigDecimal("39.00"), "PLN"))
+                .build();
+        when(productService.addProduct(any(AddProductCommand.class)))
+                .thenThrow(InvalidProductException.electronicsWithOptions());
+
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(command)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Product of type ELECTRONICS cannot have configurable options"));
+    }
 }
