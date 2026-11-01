@@ -11,6 +11,7 @@ public record CartItemResponse(
         MoneyPayload unitPrice,
         String vatRate,
         int quantity,
-        List<CartItemAddOnResponse> addOns
+        List<CartItemAddOnResponse> addOns,
+        boolean available
 ) {
 }

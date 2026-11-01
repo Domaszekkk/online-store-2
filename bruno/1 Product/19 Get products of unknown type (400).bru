@@ -1,0 +1,20 @@
+meta {
+  name: 19 Get products of unknown type (400)
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{productServiceUrl}}/products?type=TABLET
+  body: none
+  auth: none
+}
+
+params:query {
+  type: TABLET
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: contains allowed values: [COMPUTER, SMARTPHONE, ELECTRONICS]
+}

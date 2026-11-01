@@ -13,4 +13,5 @@ public class ProductAddOnDto {
     private UUID productId;
     private String name;
     private MoneyDto price;
+    private String availability;
 }

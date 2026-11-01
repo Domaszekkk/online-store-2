@@ -16,4 +16,8 @@ params:query {
 
 assert {
   res.status: eq 200
+  res.body.items: isArray
+  res.body.page: eq 0
+  res.body.size: eq 20
+  res.body.totalItems: isNumber
 }

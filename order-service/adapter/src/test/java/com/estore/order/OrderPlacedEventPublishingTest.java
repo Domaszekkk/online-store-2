@@ -56,7 +56,7 @@ class OrderPlacedEventPublishingTest {
 
     private UUID checkoutReturnsLaptopWithCable() {
         UUID cartId = UUID.randomUUID();
-        when(cartPort.checkout(cartId)).thenReturn(CartDetails.builder()
+        when(cartPort.checkout(cartId, 1L)).thenReturn(CartDetails.builder()
                 .id(cartId)
                 .items(List.of(CartItemDetails.builder()
                         .productId(UUID.randomUUID()).variantId(UUID.randomUUID())
@@ -98,7 +98,7 @@ class OrderPlacedEventPublishingTest {
     void placeOrder_DataCorrect_PublishesOrderPlacedEventFromOutbox() throws Exception {
         UUID cartId = checkoutReturnsLaptopWithCable();
         String body = """
-                {"cartId":"%s",
+                {"cartId":"%s","cartVersion":1,
                  "customer":{"firstName":"Jan","lastName":"Kowalski","email":"jan.kowalski@example.com","phone":"+48 600 100 200"},
                  "shippingAddress":{"street":"Marszałkowska 1","city":"Warszawa","postalCode":"00-001","country":"Polska"},
                  "billingAddress":{"companyName":"Kowalski Sp. z o.o.","taxIdentificationNumber":"5260250274",
@@ -132,7 +132,7 @@ class OrderPlacedEventPublishingTest {
     void documentIssuedEvent_OrderPlaced_ConfirmsOrderWithDocumentNumber() throws Exception {
         UUID cartId = checkoutReturnsLaptopWithCable();
         String body = """
-                {"cartId":"%s",
+                {"cartId":"%s","cartVersion":1,
                  "customer":{"firstName":"Jan","lastName":"Kowalski","email":"jan.kowalski@example.com","phone":"+48 600 100 200"},
                  "shippingAddress":{"street":"Marszałkowska 1","city":"Warszawa","postalCode":"00-001","country":"Polska"},
                  "paymentMethod":"BLIK","deliveryMethod":"COURIER"}

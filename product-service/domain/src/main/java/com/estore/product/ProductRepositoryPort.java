@@ -13,15 +13,19 @@ public interface ProductRepositoryPort {
 
     Optional<Product> findActiveByIdForUpdate(UUID id);
 
-    List<Product> findAllActive(ProductType type);
+    ResultPage<Product> findAllActive(ProductType type, PageQuery pageQuery);
 
-    boolean existsActiveById(UUID id);
+    List<Product> findAllActiveByIds(Collection<UUID> ids);
+
+    boolean isAddOnOfActiveProduct(UUID productId);
+
+    void lockStockKeepingUnits(Collection<String> stockKeepingUnits);
 
     List<String> findStockKeepingUnitsUsedByOtherActiveProducts(Collection<String> stockKeepingUnits, UUID productId);
 
     Optional<Product> findArchivedById(UUID id);
 
-    List<Product> findAllArchived();
+    ResultPage<Product> findAllArchived(PageQuery pageQuery);
 
     void removeAddOnsReferencing(UUID productId);
 

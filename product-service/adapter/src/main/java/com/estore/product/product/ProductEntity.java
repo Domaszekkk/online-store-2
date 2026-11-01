@@ -49,16 +49,19 @@ public class ProductEntity {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "product_id")
+    @OrderBy("position ASC, id ASC")
     @Builder.Default
     private List<ProductOptionEntity> options = new ArrayList<>();
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "product_id")
+    @OrderColumn(name = "variant_order")
     @Builder.Default
     private List<ProductVariantEntity> variants = new ArrayList<>();
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "product_id")
+    @OrderBy("id ASC")
     @Builder.Default
     private List<AddOnEntity> addOns = new ArrayList<>();
 

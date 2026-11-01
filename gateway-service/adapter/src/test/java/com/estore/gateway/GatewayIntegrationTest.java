@@ -92,7 +92,7 @@ class GatewayIntegrationTest {
         int callNumber = CALLS.computeIfAbsent(method + " " + path, key -> new AtomicInteger()).incrementAndGet();
 
         if (method.equals("GET") && path.equals("/products")) {
-            respond(exchange, 200, "[" + productBody() + "]");
+            respond(exchange, 200, "{\"items\":[" + productBody() + "],\"page\":0,\"size\":20,\"totalItems\":1,\"totalPages\":1}");
         } else if (method.equals("GET") && path.equals("/products/" + PRODUCT_ID)) {
             respond(exchange, 200, productBody());
         } else if (method.equals("GET") && path.equals("/products/" + UNAVAILABLE_PRODUCT_ID)) {
@@ -119,6 +119,8 @@ class GatewayIntegrationTest {
         } else if (method.equals("POST") && path.equals("/orders") && body.contains(INVALID_TAX_IDENTIFICATION_NUMBER)) {
             respond(exchange, 400, "{\"message\":\"Validation failed: billingAddress.taxIdentificationNumber: "
                     + "must be 10 digits with a correct checksum\"}");
+        } else if (method.equals("POST") && path.equals("/orders") && !body.contains("\"cartVersion\":3")) {
+            respond(exchange, 400, "{\"message\":\"cart version was not passed on\"}");
         } else if (method.equals("POST") && path.equals("/orders")) {
             respond(exchange, 201, orderBody());
         } else if (method.equals("GET") && path.equals("/orders/" + ORDER_ID)) {
@@ -142,7 +144,7 @@ class GatewayIntegrationTest {
                  "options":[{"name":"RAM","position":1,"values":["16GB","32GB"]}],
                  "variants":[{"id":"%s","stockKeepingUnit":"PBX15-16","optionValues":{"RAM":"16GB"},
                               "price":{"amount":4599.00,"currency":"PLN"},"availability":"AVAILABLE","vatRate":"VAT_23"}],
-                 "addOns":[{"productId":"%s","name":"Kabel HDMI 2m","price":{"amount":39.00,"currency":"PLN"},"vatRate":"VAT_23"}]}
+                 "addOns":[{"productId":"%s","name":"Kabel HDMI 2m","price":{"amount":39.00,"currency":"PLN"},"vatRate":"VAT_23","availability":"AVAILABLE"}]}
                 """.formatted(PRODUCT_ID, VARIANT_ID, ADD_ON_PRODUCT_ID);
     }
 
@@ -159,7 +161,7 @@ class GatewayIntegrationTest {
                   {"id":"%s","productId":"%s","variantId":"%s","productName":"ProBook X15",
                    "stockKeepingUnit":"PBX15-16","unitPrice":{"amount":4599.00,"currency":"PLN"},"vatRate":"VAT_23","quantity":1,
                    "addOns":[{"productId":"%s","name":"Kabel HDMI 2m","price":{"amount":39.00,"currency":"PLN"},"vatRate":"VAT_23","quantity":1}],
-                   "lineTotal":{"amount":4638.00,"currency":"PLN"}}],
+                   "lineTotal":{"amount":4638.00,"currency":"PLN"},"available":true}],
                  "total":{"amount":4638.00,"currency":"PLN"},
                  "createdAt":"2026-10-22T10:00:00Z","updatedAt":"2026-10-22T10:01:00Z"}
                 """.formatted(CART_ID, ITEM_ID, PRODUCT_ID, VARIANT_ID, ADD_ON_PRODUCT_ID);
@@ -174,7 +176,7 @@ class GatewayIntegrationTest {
                            "unitPrice":{"amount":4599.00,"currency":"PLN"},"vatRate":"VAT_23","quantity":1,"addOns":[],
                            "lineTotal":{"amount":4599.00,"currency":"PLN"}}],
                  "itemsTotal":{"amount":4599.00,"currency":"PLN"},"deliveryCost":{"amount":12.99,"currency":"PLN"},
-                 "grandTotal":{"amount":4611.99,"currency":"PLN"}}
+                 "grandTotal":{"amount":4611.99,"currency":"PLN"},"cartVersion":3}
                 """.formatted(PRODUCT_ID, VARIANT_ID);
     }
 
@@ -197,7 +199,7 @@ class GatewayIntegrationTest {
 
     private static String placeOrderBody(String taxIdentificationNumber) {
         return """
-                {"cartId":"%s",
+                {"cartId":"%s","cartVersion":3,
                  "customer":{"firstName":"Jan","lastName":"Kowalski","email":"jan.kowalski@example.com","phone":"+48 600 100 200"},
                  "shippingAddress":{"street":"Marszałkowska 1","city":"Warszawa","postalCode":"00-001","country":"Polska"},
                  "billingAddress":{"companyName":"Kowalski Sp. z o.o.","taxIdentificationNumber":"%s",
@@ -228,14 +230,16 @@ class GatewayIntegrationTest {
     void purchase_FromProductListToInvoicePdf_PassesThroughAllServices() throws Exception {
         mockMvc.perform(get("/shop/products").param("type", "COMPUTER"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(PRODUCT_ID.toString()))
-                .andExpect(jsonPath("$[0].basePrice.amount").value(3999.00));
+                .andExpect(jsonPath("$.items[0].id").value(PRODUCT_ID.toString()))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.items[0].basePrice.amount").value(3999.00));
 
         mockMvc.perform(get("/shop/products/{id}", PRODUCT_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.options[0].values[1]").value("32GB"))
                 .andExpect(jsonPath("$.variants[0].id").value(VARIANT_ID.toString()))
-                .andExpect(jsonPath("$.addOns[0].productId").value(ADD_ON_PRODUCT_ID.toString()));
+                .andExpect(jsonPath("$.addOns[0].productId").value(ADD_ON_PRODUCT_ID.toString()))
+                .andExpect(jsonPath("$.addOns[0].availability").value("AVAILABLE"));
 
         mockMvc.perform(post("/shop/carts"))
                 .andExpect(status().isCreated())
@@ -250,6 +254,7 @@ class GatewayIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].id").value(ITEM_ID.toString()))
                 .andExpect(jsonPath("$.items[0].addOns[0].name").value("Kabel HDMI 2m"))
+                .andExpect(jsonPath("$.items[0].available").value(true))
                 .andExpect(jsonPath("$.total.amount").value(4638.00));
 
         mockMvc.perform(get("/shop/checkout-options"))
@@ -265,6 +270,7 @@ class GatewayIntegrationTest {
                 .andExpect(jsonPath("$.orderNumber").doesNotExist())
                 .andExpect(jsonPath("$.deliveryCost.amount").value(12.99))
                 .andExpect(jsonPath("$.grandTotal.amount").value(4611.99))
+                .andExpect(jsonPath("$.cartVersion").value(3))
                 .andExpect(jsonPath("$.lines[0].stockKeepingUnit").doesNotExist())
                 .andExpect(jsonPath("$.lines[0].vatRate").doesNotExist());
 
@@ -323,6 +329,24 @@ class GatewayIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         "Validation failed: billingAddress.taxIdentificationNumber: must be 10 digits with a correct checksum"));
+    }
+
+    @Test
+    void placeOrder_WithoutCartVersionFromPreview_Returns400WithoutCallingOrderService() throws Exception {
+        String bodyWithoutCartVersion = placeOrderBody("5260250274").replace("\"cartVersion\":3,", "");
+
+        mockMvc.perform(post("/shop/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithoutCartVersion))
+                .andExpect(status().isOk());
+        int orderCallsBefore = callsFor("POST /orders");
+        mockMvc.perform(post("/shop/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithoutCartVersion))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed: cartVersion: must not be null"));
+
+        assertEquals(orderCallsBefore, callsFor("POST /orders"));
     }
 
     @Test

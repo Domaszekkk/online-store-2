@@ -6,8 +6,18 @@ meta {
 
 post {
   url: {{cartServiceUrl}}/carts/{{retryCartId}}/checkout
-  body: none
+  body: json
   auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "expectedVersion": {{retryCartVersion}}
+  }
 }
 
 assert {

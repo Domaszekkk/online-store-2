@@ -50,4 +50,13 @@ public class InvalidProductException extends ProductException {
     public static InvalidProductException unknownVariant(UUID variantId, UUID productId) {
         return new InvalidProductException("Variant " + variantId + " does not belong to product " + productId);
     }
+
+    public static InvalidProductException usedAsAddOn(UUID productId, ProductType type) {
+        return new InvalidProductException("Product " + productId + " is an add-on of other products, so its type cannot change to "
+                + type + "; only ELECTRONICS products can be sold as add-ons");
+    }
+
+    public static InvalidProductException duplicateVariantId(UUID variantId) {
+        return new InvalidProductException("Variant " + variantId + " is listed more than once");
+    }
 }

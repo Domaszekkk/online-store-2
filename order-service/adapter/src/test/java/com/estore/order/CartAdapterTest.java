@@ -42,6 +42,7 @@ class CartAdapterTest {
     private static final UUID FLAKY_CART_ID = UUID.randomUUID();
     private static final UUID SLOW_CART_ID = UUID.randomUUID();
     private static final Map<String, AtomicInteger> CALLS_PER_PATH = new ConcurrentHashMap<>();
+    private static final Map<String, String> REQUEST_BODY_PER_PATH = new ConcurrentHashMap<>();
     private static final HttpServer CART_SERVICE_STUB = startCartServiceStub();
 
     @Autowired
@@ -72,15 +73,16 @@ class CartAdapterTest {
     private static void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
         int callNumber = CALLS_PER_PATH.computeIfAbsent(path, key -> new AtomicInteger()).incrementAndGet();
+        REQUEST_BODY_PER_PATH.put(path, new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
 
-        if ("GET".equals(exchange.getRequestMethod())) {
-            if (path.equals("/carts/" + MISSING_CART_ID)) {
+        if (!"POST".equals(exchange.getRequestMethod())) {
+            respond(exchange, 405, "{\"message\":\"method not allowed\"}");
+        } else if (path.endsWith("/refresh")) {
+            if (path.equals("/carts/" + MISSING_CART_ID + "/refresh")) {
                 respond(exchange, 404, "{\"message\":\"Cart with id " + MISSING_CART_ID + " not found\"}");
             } else {
                 respond(exchange, 200, cartBody(UUID.fromString(path.split("/")[2])));
             }
-        } else if (!"POST".equals(exchange.getRequestMethod())) {
-            respond(exchange, 405, "{\"message\":\"method not allowed\"}");
         } else if (path.equals(checkoutPath(MISSING_CART_ID))) {
             respond(exchange, 404, "{\"message\":\"Cart with id " + MISSING_CART_ID + " not found\"}");
         } else if (path.equals(checkoutPath(EMPTY_CART_ID))) {
@@ -100,11 +102,11 @@ class CartAdapterTest {
 
     private static String cartBody(UUID cartId) {
         return """
-                {"id":"%s","status":"CHECKED_OUT","items":[
+                {"id":"%s","status":"CHECKED_OUT","version":7,"items":[
                   {"id":"%s","productId":"%s","variantId":"%s","productName":"ProBook X15",
                    "stockKeepingUnit":"PBX15-I7-16","unitPrice":{"amount":4599.00,"currency":"PLN"},"vatRate":"VAT_23","quantity":2,
                    "addOns":[{"productId":"%s","name":"Kabel HDMI 2m","price":{"amount":39.00,"currency":"PLN"},"vatRate":"VAT_8","quantity":1}],
-                   "lineTotal":{"amount":9237.00,"currency":"PLN"}}],
+                   "lineTotal":{"amount":9237.00,"currency":"PLN"},"available":true}],
                  "total":{"amount":9237.00,"currency":"PLN"}}
                 """.formatted(cartId, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
     }
@@ -137,12 +139,15 @@ class CartAdapterTest {
     }
 
     @Test
-    void checkout_CartWithItems_MapsResponse() {
-        CartDetails result = cartPort.checkout(CART_ID);
+    void checkout_CartWithItems_SendsExpectedVersionAndMapsResponse() {
+        CartDetails result = cartPort.checkout(CART_ID, 7);
 
         CartItemDetails item = result.getItems().get(0);
         assertAll(
+                () -> assertEquals("{\"expectedVersion\":7}", REQUEST_BODY_PER_PATH.get(checkoutPath(CART_ID))),
                 () -> assertEquals(CART_ID, result.getId()),
+                () -> assertEquals(7, result.getVersion()),
+                () -> assertEquals(true, item.isAvailable()),
                 () -> assertEquals("PBX15-I7-16", item.getStockKeepingUnit()),
                 () -> assertEquals(2, item.getQuantity()),
                 () -> assertEquals(0, new BigDecimal("4599.00").compareTo(item.getUnitPrice().amount())),
@@ -156,7 +161,7 @@ class CartAdapterTest {
     @Test
     void checkout_EmptyCart_ThrowsConflictWithCartServiceReasonWithoutRetry() {
         CartNotOrderableException exception = Assertions.assertThrows(CartNotOrderableException.class,
-                () -> cartPort.checkout(EMPTY_CART_ID));
+                () -> cartPort.checkout(EMPTY_CART_ID, 1));
 
         assertAll(
                 () -> assertEquals(409, exception.getResponseCode()),
@@ -169,7 +174,7 @@ class CartAdapterTest {
     @Test
     void checkout_CartNotFound_ThrowsCartNotFoundExceptionWithoutRetry() {
         CartNotFoundException exception = Assertions.assertThrows(CartNotFoundException.class,
-                () -> cartPort.checkout(MISSING_CART_ID));
+                () -> cartPort.checkout(MISSING_CART_ID, 1));
 
         assertAll(
                 () -> assertEquals(404, exception.getResponseCode()),
@@ -179,7 +184,7 @@ class CartAdapterTest {
 
     @Test
     void checkout_ServerErrorOnce_IsRetriedAndReturnsCart() {
-        CartDetails result = cartPort.checkout(FLAKY_CART_ID);
+        CartDetails result = cartPort.checkout(FLAKY_CART_ID, 1);
 
         assertAll(
                 () -> assertEquals(FLAKY_CART_ID, result.getId()),
@@ -189,7 +194,7 @@ class CartAdapterTest {
 
     @Test
     void checkout_FirstResponseTooSlow_IsRetriedAndReturnsCart() {
-        CartDetails result = cartPort.checkout(SLOW_CART_ID);
+        CartDetails result = cartPort.checkout(SLOW_CART_ID, 1);
 
         assertAll(
                 () -> assertEquals(SLOW_CART_ID, result.getId()),
@@ -200,7 +205,7 @@ class CartAdapterTest {
     @Test
     void checkout_ServerKeepsFailing_ThrowsUnavailableAfterMaxAttempts() {
         CartServiceUnavailableException exception = Assertions.assertThrows(CartServiceUnavailableException.class,
-                () -> cartPort.checkout(FAILING_CART_ID));
+                () -> cartPort.checkout(FAILING_CART_ID, 1));
 
         assertAll(
                 () -> assertEquals(503, exception.getResponseCode()),
@@ -209,10 +214,10 @@ class CartAdapterTest {
     }
 
     @Test
-    void getCart_CartWithItems_MapsResponse() {
+    void refreshCart_CartWithItems_MapsResponse() {
         UUID cartId = UUID.randomUUID();
 
-        CartDetails result = cartPort.getCart(cartId);
+        CartDetails result = cartPort.refreshCart(cartId);
 
         assertAll(
                 () -> assertEquals(cartId, result.getId()),
@@ -222,9 +227,9 @@ class CartAdapterTest {
     }
 
     @Test
-    void getCart_CartNotFound_ThrowsCartNotFoundException() {
+    void refreshCart_CartNotFound_ThrowsCartNotFoundException() {
         CartNotFoundException exception = Assertions.assertThrows(CartNotFoundException.class,
-                () -> cartPort.getCart(MISSING_CART_ID));
+                () -> cartPort.refreshCart(MISSING_CART_ID));
 
         assertEquals(404, exception.getResponseCode());
     }

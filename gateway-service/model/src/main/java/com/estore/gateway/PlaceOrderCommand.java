@@ -11,6 +11,7 @@ import java.util.UUID;
 @Builder
 public class PlaceOrderCommand {
     private UUID cartId;
+    private Long cartVersion;
     private Customer customer;
     private Address shippingAddress;
     private BillingAddress billingAddress;

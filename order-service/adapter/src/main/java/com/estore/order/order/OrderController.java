@@ -3,8 +3,11 @@ package com.estore.order.order;
 import com.estore.order.ChangeOrderStatusRequest;
 import com.estore.order.DeliveryMethodDto;
 import com.estore.order.OrderDto;
+import com.estore.order.OrderPlacement;
 import com.estore.order.OrderPreviewDto;
 import com.estore.order.OrderService;
+import com.estore.order.PageDto;
+import com.estore.order.PageQuery;
 import com.estore.order.PlaceOrderRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,8 +15,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,17 +33,19 @@ public class OrderController {
     private final OrderMapper orderMapper;
 
     @Operation(summary = "Place an order",
-            description = "Checks out the cart in cart-service and creates an order from its content (prices are snapshotted)")
+            description = "Checks out the cart in cart-service and creates an order from its content (prices are snapshotted). "
+                    + "cartVersion comes from the order preview, so the order is placed only from the content the customer has seen")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Order placed"),
-            @ApiResponse(responseCode = "400", description = "Invalid request (missing customer data, address, payment or delivery method)"),
+            @ApiResponse(responseCode = "400", description = "Invalid request (missing customer data, address, payment or delivery method, cart version)"),
             @ApiResponse(responseCode = "404", description = "Cart not found"),
-            @ApiResponse(responseCode = "409", description = "Cart is empty or an order was already placed from it"),
+            @ApiResponse(responseCode = "409", description = "Cart is empty, has changed since the preview, contains unavailable products "
+                    + "or an order was already placed from it"),
             @ApiResponse(responseCode = "503", description = "Cart service is unavailable")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public OrderDto placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
+    public OrderDto placeOrder(@Validated({Default.class, OrderPlacement.class}) @RequestBody PlaceOrderRequest request) {
         return orderMapper.toDto(orderService.placeOrder(orderMapper.toCommand(request)));
     }
 
@@ -83,14 +90,19 @@ public class OrderController {
     }
 
     @Operation(summary = "Get order history",
-            description = "Returns orders newest first; with email only the orders of that customer (case-insensitive)")
+            description = "Returns one page of orders, newest first; with email only the orders of that customer (case-insensitive)")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Orders returned (possibly empty list)")
+            @ApiResponse(responseCode = "200", description = "Page of orders returned (possibly empty)"),
+            @ApiResponse(responseCode = "400", description = "Negative page or page size outside 1-100")
     })
     @GetMapping
-    public List<OrderDto> getOrders(@Parameter(description = "Customer email to filter by (optional)")
-                                    @RequestParam(required = false) String email) {
-        return orderMapper.toDtos(orderService.getOrders(email));
+    public PageDto<OrderDto> getOrders(@Parameter(description = "Customer email to filter by (optional)")
+                                       @RequestParam(required = false) String email,
+                                       @Parameter(description = "Page number, starting from 0")
+                                       @RequestParam(defaultValue = "0") int page,
+                                       @Parameter(description = "Page size, from 1 to 100")
+                                       @RequestParam(defaultValue = "20") int size) {
+        return orderMapper.toPageDto(orderService.getOrders(email, new PageQuery(page, size)));
     }
 
     @Operation(summary = "Get delivery methods", description = "Returns the available delivery methods with their gross cost")

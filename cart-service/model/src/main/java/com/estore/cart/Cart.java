@@ -6,7 +6,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Getter
 @Setter
@@ -21,19 +23,40 @@ public class Cart {
     private List<CartItem> items = new ArrayList<>();
 
     private Money total;
+    private long version;
     private Instant createdAt;
     private Instant updatedAt;
+    private Instant expiresAt;
 
-    public static Cart createNew() {
-        Instant now = Instant.now();
+    public static Cart createNew(Instant now, Instant expiresAt) {
         return Cart.builder()
                 .id(UUID.randomUUID())
                 .status(CartStatus.ACTIVE)
                 .items(new ArrayList<>())
                 .total(Money.zero("PLN"))
+                .version(0)
                 .createdAt(now)
                 .updatedAt(now)
+                .expiresAt(expiresAt)
                 .build();
+    }
+
+    public void expireIfInactive(Instant now) {
+        if (status == CartStatus.ACTIVE && !now.isBefore(expiresAt)) {
+            this.status = CartStatus.EXPIRED;
+        }
+    }
+
+    public void extendExpiration(Instant newExpiresAt) {
+        if (status == CartStatus.ACTIVE) {
+            this.expiresAt = newExpiresAt;
+        }
+    }
+
+    public void requireNotExpired() {
+        if (status == CartStatus.EXPIRED) {
+            throw new CartExpiredException(id);
+        }
     }
 
     public void addItem(CartItem item) {
@@ -56,6 +79,46 @@ public class Cart {
         markChanged();
     }
 
+    public boolean refresh(CatalogSnapshot catalog) {
+        requireActive();
+        boolean changed = false;
+        for (CartItem item : items) {
+            if (catalog.covers(item.getProductId())) {
+                changed |= catalog.find(item.getProductId())
+                        .map(item::refreshFrom)
+                        .orElseGet(item::markUnavailable);
+            }
+        }
+        if (changed) {
+            markChanged();
+        }
+        return changed;
+    }
+
+    public Set<UUID> productIds() {
+        return items.stream().map(CartItem::getProductId).collect(Collectors.toSet());
+    }
+
+    public boolean hasUnavailableItems() {
+        return items.stream().anyMatch(item -> !item.isAvailable());
+    }
+
+    public void requireVersion(long expectedVersion) {
+        if (version != expectedVersion) {
+            throw new CartChangedException(id);
+        }
+    }
+
+    public void requireAllItemsAvailable() {
+        List<String> unavailableProducts = items.stream()
+                .filter(item -> !item.isAvailable())
+                .map(CartItem::getProductName)
+                .toList();
+        if (!unavailableProducts.isEmpty()) {
+            throw new UnavailableItemsException(id, unavailableProducts);
+        }
+    }
+
     public boolean isCheckedOut() {
         return status == CartStatus.CHECKED_OUT;
     }
@@ -68,11 +131,13 @@ public class Cart {
         if (items.isEmpty()) {
             throw new EmptyCartException(id);
         }
+        requireAllItemsAvailable();
         this.status = CartStatus.CHECKED_OUT;
         this.updatedAt = Instant.now();
     }
 
     private void requireActive() {
+        requireNotExpired();
         if (status != CartStatus.ACTIVE) {
             throw new CartNotActiveException(id, status);
         }
@@ -91,6 +156,7 @@ public class Cart {
 
     private void markChanged() {
         recomputeTotal();
+        this.version++;
         this.updatedAt = Instant.now();
     }
 

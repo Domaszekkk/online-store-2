@@ -3,11 +3,11 @@ package com.estore.gateway.product;
 import com.estore.gateway.ProductCatalogPort;
 import com.estore.gateway.ProductDetails;
 import com.estore.gateway.ProductSummary;
+import com.estore.gateway.ResultPage;
 import com.estore.gateway.client.RemoteServiceCalls;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -20,8 +20,8 @@ public class ProductCatalogAdapter implements ProductCatalogPort {
     private final RemoteServiceCalls remoteServiceCalls;
 
     @Override
-    public List<ProductSummary> findProducts(String type) {
-        return productMapper.toSummaries(remoteServiceCalls.call(SERVICE_NAME, () -> productClient.getProducts(type)));
+    public ResultPage<ProductSummary> findProducts(String type, int page, int size) {
+        return productMapper.toSummaryPage(remoteServiceCalls.call(SERVICE_NAME, () -> productClient.getProducts(type, page, size)));
     }
 
     @Override

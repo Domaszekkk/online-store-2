@@ -28,6 +28,7 @@ public class ProductOptionEntity {
     @ElementCollection
     @CollectionTable(name = "product_option_values", joinColumns = @JoinColumn(name = "option_id"))
     @Column(name = "value")
+    @OrderColumn(name = "value_order")
     @Builder.Default
     private List<String> values = new ArrayList<>();
 }

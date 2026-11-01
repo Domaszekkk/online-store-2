@@ -31,6 +31,9 @@ public class CartItem {
 
     private Money lineTotal;
 
+    @Builder.Default
+    private boolean available = true;
+
     public static CartItem create(UUID productId,
                                   String productName,
                                   VariantDetails variant,
@@ -47,6 +50,7 @@ public class CartItem {
                 .vatRate(variant.getVatRate())
                 .quantity(quantity)
                 .addOns(addOns)
+                .available(true)
                 .build();
         item.recomputeLineTotal();
         return item;
@@ -75,11 +79,53 @@ public class CartItem {
                     .ifPresent(addOn -> requireValidQuantity(addOn.getQuantity() + otherAddOn.getQuantity()));
         }
         this.quantity += other.quantity;
+        this.unitPrice = other.unitPrice;
+        this.vatRate = other.vatRate;
+        this.available = other.available;
         for (CartItemAddOn otherAddOn : other.addOns) {
-            findAddOn(otherAddOn.getProductId())
-                    .ifPresent(addOn -> addOn.setQuantity(addOn.getQuantity() + otherAddOn.getQuantity()));
+            findAddOn(otherAddOn.getProductId()).ifPresent(addOn -> {
+                addOn.setQuantity(addOn.getQuantity() + otherAddOn.getQuantity());
+                addOn.updatePrice(otherAddOn.getPrice(), otherAddOn.getVatRate());
+            });
         }
         recomputeLineTotal();
+    }
+
+    public boolean refreshFrom(ProductDetails product) {
+        Optional<VariantDetails> variant = product.findVariant(variantId);
+        boolean changed = variant
+                .map(current -> updatePrice(current.getPrice(), current.getVatRate()))
+                .orElse(false);
+        boolean everythingAvailable = variant.map(VariantDetails::isAvailable).orElse(false);
+        for (CartItemAddOn addOn : addOns) {
+            Optional<AddOnDetails> currentAddOn = product.findAddOn(addOn.getProductId());
+            changed |= currentAddOn
+                    .map(current -> addOn.updatePrice(current.getPrice(), current.getVatRate()))
+                    .orElse(false);
+            everythingAvailable &= currentAddOn.map(AddOnDetails::isAvailable).orElse(false);
+        }
+        changed |= changeAvailability(everythingAvailable);
+        if (changed) {
+            recomputeLineTotal();
+        }
+        return changed;
+    }
+
+    public boolean markUnavailable() {
+        return changeAvailability(false);
+    }
+
+    private boolean changeAvailability(boolean available) {
+        boolean changed = this.available != available;
+        this.available = available;
+        return changed;
+    }
+
+    private boolean updatePrice(Money price, VatRate vatRate) {
+        boolean changed = unitPrice.amount().compareTo(price.amount()) != 0 || this.vatRate != vatRate;
+        this.unitPrice = price;
+        this.vatRate = vatRate;
+        return changed;
     }
 
     private Optional<CartItemAddOn> findAddOn(UUID addOnProductId) {

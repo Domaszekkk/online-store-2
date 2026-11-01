@@ -1,0 +1,105 @@
+databaseChangeLog:
+  - changeSet:
+      id: 012-add-variant-and-option-value-order
+      author: estore
+      comment: "Variants and option values keep the order in which they were given; existing rows are numbered once"
+      changes:
+        - addColumn:
+            tableName: product_variants
+            columns:
+              - column:
+                  name: variant_order
+                  type: INT
+        - addColumn:
+            tableName: product_option_values
+            columns:
+              - column:
+                  name: value_order
+                  type: INT
+        - sql:
+            sql: >
+              UPDATE product_variants variant
+              SET variant_order = numbered.row_position
+              FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY stock_keeping_unit) - 1 AS row_position
+                    FROM product_variants) numbered
+              WHERE variant.id = numbered.id
+        - sql:
+            sql: >
+              UPDATE product_option_values option_value
+              SET value_order = numbered.row_position
+              FROM (SELECT ctid AS row_id, ROW_NUMBER() OVER (PARTITION BY option_id ORDER BY ctid) - 1 AS row_position
+                    FROM product_option_values) numbered
+              WHERE option_value.ctid = numbered.row_id
+      rollback:
+        - dropColumn:
+            tableName: product_variants
+            columnName: variant_order
+        - dropColumn:
+            tableName: product_option_values
+            columnName: value_order
+  - changeSet:
+      id: 013-add-product-not-null-constraints
+      author: estore
+      comment: "Columns that every product, variant, option and add-on must have"
+      changes:
+        - addNotNullConstraint:
+            tableName: products
+            columnName: name
+        - addNotNullConstraint:
+            tableName: products
+            columnName: type
+        - addNotNullConstraint:
+            tableName: products
+            columnName: base_price_amount
+        - addNotNullConstraint:
+            tableName: products
+            columnName: base_price_currency
+        - addNotNullConstraint:
+            tableName: product_variants
+            columnName: stock_keeping_unit
+        - addNotNullConstraint:
+            tableName: product_variants
+            columnName: price_amount
+        - addNotNullConstraint:
+            tableName: product_variants
+            columnName: price_currency
+        - addNotNullConstraint:
+            tableName: product_variants
+            columnName: availability
+        - addNotNullConstraint:
+            tableName: product_options
+            columnName: name
+        - addNotNullConstraint:
+            tableName: product_options
+            columnName: position
+        - addNotNullConstraint:
+            tableName: product_option_values
+            columnName: value
+        - addNotNullConstraint:
+            tableName: add_ons
+            columnName: product_ref_id
+        - addNotNullConstraint:
+            tableName: add_ons
+            columnName: name
+        - addNotNullConstraint:
+            tableName: add_ons
+            columnName: price_amount
+        - addNotNullConstraint:
+            tableName: add_ons
+            columnName: price_currency
+  - changeSet:
+      id: 014-add-product-price-checks
+      author: estore
+      comment: "Prices cannot be negative"
+      changes:
+        - sql:
+            sql: >
+              ALTER TABLE products ADD CONSTRAINT ck_products_base_price_not_negative CHECK (base_price_amount >= 0);
+              ALTER TABLE product_variants ADD CONSTRAINT ck_product_variants_price_not_negative CHECK (price_amount >= 0);
+              ALTER TABLE add_ons ADD CONSTRAINT ck_add_ons_price_not_negative CHECK (price_amount >= 0)
+      rollback:
+        - sql:
+            sql: >
+              ALTER TABLE products DROP CONSTRAINT ck_products_base_price_not_negative;
+              ALTER TABLE product_variants DROP CONSTRAINT ck_product_variants_price_not_negative;
+              ALTER TABLE add_ons DROP CONSTRAINT ck_add_ons_price_not_negative

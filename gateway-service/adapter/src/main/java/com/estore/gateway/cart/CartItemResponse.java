@@ -12,5 +12,6 @@ public record CartItemResponse(UUID id,
                                MoneyPayload unitPrice,
                                int quantity,
                                List<CartItemAddOnResponse> addOns,
-                               MoneyPayload lineTotal) {
+                               MoneyPayload lineTotal,
+                               boolean available) {
 }

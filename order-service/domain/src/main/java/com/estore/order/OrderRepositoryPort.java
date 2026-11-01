@@ -1,6 +1,5 @@
 package com.estore.order;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,9 +12,9 @@ public interface OrderRepositoryPort {
 
     Optional<Order> findByCartId(UUID cartId);
 
-    List<Order> findAll();
+    ResultPage<Order> findAll(PageQuery pageQuery);
 
-    List<Order> findAllByCustomerEmail(String email);
+    ResultPage<Order> findAllByCustomerEmail(String email, PageQuery pageQuery);
 
     long nextOrderSequenceNumber();
 }

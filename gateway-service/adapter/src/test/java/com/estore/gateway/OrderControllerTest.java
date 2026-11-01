@@ -44,7 +44,7 @@ class OrderControllerTest {
     private ShopService shopService;
 
     private static final String ORDER_WITHOUT_INVOICE = """
-            {"cartId":"%s",
+            {"cartId":"%s","cartVersion":5,
              "customer":{"firstName":"Jan","lastName":"Kowalski","email":"jan.kowalski@example.com","phone":"+48 600 100 200"},
              "shippingAddress":{"street":"Marszałkowska 1","city":"Warszawa","postalCode":"00-001","country":"Polska"},
              "paymentMethod":"BLIK","deliveryMethod":"COURIER"}
@@ -100,7 +100,8 @@ class OrderControllerTest {
         assertAll(
                 () -> assertNull(command.getValue().getBillingAddress()),
                 () -> assertEquals("BLIK", command.getValue().getPaymentMethod()),
-                () -> assertEquals("Warszawa", command.getValue().getShippingAddress().getCity())
+                () -> assertEquals("Warszawa", command.getValue().getShippingAddress().getCity()),
+                () -> assertEquals(5L, command.getValue().getCartVersion())
         );
     }
 
@@ -133,7 +134,7 @@ class OrderControllerTest {
                         .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        "Validation failed: cartId: must not be null; customer: must not be null; "
+                        "Validation failed: cartId: must not be null; cartVersion: must not be null; customer: must not be null; "
                                 + "deliveryMethod: must not be null; paymentMethod: must not be null; "
                                 + "shippingAddress: must not be null"));
         verifyNoInteractions(shopService);

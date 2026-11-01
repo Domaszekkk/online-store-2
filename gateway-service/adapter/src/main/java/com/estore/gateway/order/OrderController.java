@@ -3,6 +3,7 @@ package com.estore.gateway.order;
 import com.estore.gateway.DocumentPendingMessage;
 import com.estore.gateway.OrderDocument;
 import com.estore.gateway.OrderDto;
+import com.estore.gateway.OrderPlacement;
 import com.estore.gateway.OrderPreviewDto;
 import com.estore.gateway.PlaceOrderRequest;
 import com.estore.gateway.ShopService;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ContentDisposition;
@@ -19,6 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -51,17 +54,19 @@ public class OrderController {
     }
 
     @Operation(summary = "Place an order",
-            description = "Places an order from the cart; billingAddress means an invoice, with companyName and taxIdentificationNumber a company invoice")
+            description = "Places an order from the cart; billingAddress means an invoice, with companyName and taxIdentificationNumber a company invoice. "
+                    + "cartVersion is taken from the order preview (screen 3), so the order matches the summary the customer has seen")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Order placed"),
-            @ApiResponse(responseCode = "400", description = "Invalid order data"),
+            @ApiResponse(responseCode = "400", description = "Invalid order data or missing cart version"),
             @ApiResponse(responseCode = "404", description = "Cart not found"),
-            @ApiResponse(responseCode = "409", description = "Cart is empty or an order was already placed from it"),
+            @ApiResponse(responseCode = "409", description = "Cart is empty, has changed since the preview, contains unavailable products "
+                    + "or an order was already placed from it"),
             @ApiResponse(responseCode = "503", description = "Order service is unavailable")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public OrderDto placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
+    public OrderDto placeOrder(@Validated({Default.class, OrderPlacement.class}) @RequestBody PlaceOrderRequest request) {
         return orderMapper.toDto(shopService.placeOrder(orderMapper.toCommand(request)));
     }
 

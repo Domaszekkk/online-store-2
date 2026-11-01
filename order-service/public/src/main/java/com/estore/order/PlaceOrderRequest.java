@@ -15,6 +15,9 @@ public class PlaceOrderRequest {
     @NotNull
     private UUID cartId;
 
+    @NotNull(groups = OrderPlacement.class)
+    private Long cartVersion;
+
     @NotNull
     @Valid
     private CustomerRequest customer;

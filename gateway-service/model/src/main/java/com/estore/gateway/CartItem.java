@@ -19,4 +19,5 @@ public class CartItem {
     private int quantity;
     private List<CartItemAddOn> addOns;
     private Money lineTotal;
+    private boolean available;
 }

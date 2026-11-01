@@ -3,7 +3,7 @@ package com.estore.order;
 import java.util.UUID;
 
 public interface CartPort {
-    CartDetails checkout(UUID cartId);
+    CartDetails checkout(UUID cartId, long expectedVersion);
 
-    CartDetails getCart(UUID cartId);
+    CartDetails refreshCart(UUID cartId);
 }

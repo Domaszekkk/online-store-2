@@ -12,15 +12,23 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.startsWith;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -77,9 +85,6 @@ class ProductIntegrationTest {
                         .build()))
                 .addOns(List.of(AddOn.builder()
                         .productId(accessoryId)
-                        .name("Mysz")
-                        .price(Money.of(new BigDecimal("99.00"), "PLN"))
-                        .vatRate(VatRate.VAT_8)
                         .build()))
                 .build();
     }
@@ -128,8 +133,10 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value(startsWith("PBX15-I7-16")))
                 .andExpect(jsonPath("$.variants[0].availability").value("AVAILABLE"))
                 .andExpect(jsonPath("$.variants[0].vatRate").value("VAT_23"))
-                .andExpect(jsonPath("$.addOns[0].name").value("Mysz"))
-                .andExpect(jsonPath("$.addOns[0].vatRate").value("VAT_8"))
+                .andExpect(jsonPath("$.addOns[0].name").value("Mysz bezprzewodowa"))
+                .andExpect(jsonPath("$.addOns[0].price.amount").value(99.00))
+                .andExpect(jsonPath("$.addOns[0].vatRate").value("VAT_23"))
+                .andExpect(jsonPath("$.addOns[0].availability").value("AVAILABLE"))
                 .andReturn().getResponse().getContentAsString();
 
         String id = objectMapper.readTree(created).get("id").asText();
@@ -143,26 +150,56 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value(startsWith("PBX15-I7-16")))
                 .andExpect(jsonPath("$.variants[0].optionValues.Procesor").value("i7"))
                 .andExpect(jsonPath("$.variants[0].vatRate").value("VAT_23"))
-                .andExpect(jsonPath("$.addOns[0].vatRate").value("VAT_8"));
+                .andExpect(jsonPath("$.addOns[0].vatRate").value("VAT_23"));
     }
 
     @Test
     void getProducts_ByType_ReturnsMatchingProducts() throws Exception {
         String id = createProduct(sampleLaptopCommand());
 
-        mockMvc.perform(get("/products").param("type", "COMPUTER"))
+        mockMvc.perform(get("/products").param("type", "COMPUTER").param("size", "100"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + id + "')]").exists())
-                .andExpect(jsonPath("$[?(@.id=='" + id + "')].type").value(hasItem("COMPUTER")));
+                .andExpect(jsonPath("$.items[?(@.id=='" + id + "')]").exists())
+                .andExpect(jsonPath("$.items[?(@.id=='" + id + "')].type").value(hasItem("COMPUTER")));
+    }
+
+    @Test
+    void getProducts_SecondPage_ReturnsProductsSortedByName() throws Exception {
+        String type = "SMARTPHONE";
+        String namePrefix = "Paged " + UUID.randomUUID().toString().substring(0, 8) + " ";
+        for (String letter : List.of("C", "A", "B")) {
+            mockMvc.perform(post("/products")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"name":"%s","type":"%s","basePrice":{"amount":1.00,"currency":"PLN"},
+                                     "variants":[{"stockKeepingUnit":"%s","price":{"amount":1.00,"currency":"PLN"},
+                                                  "availability":"AVAILABLE","vatRate":"VAT_23"}]}
+                                    """.formatted(namePrefix + letter, type, uniqueStockKeepingUnit("PAGED"))))
+                    .andExpect(status().isCreated());
+        }
+
+        String firstPage = mockMvc.perform(get("/products").param("type", type).param("size", "100"))
+                .andReturn().getResponse().getContentAsString();
+        List<String> names = new ArrayList<>();
+        objectMapper.readTree(firstPage).get("items").forEach(item -> names.add(item.get("name").asText()));
+        int positionOfA = names.indexOf(namePrefix + "A");
+
+        mockMvc.perform(get("/products").param("type", type).param("page", String.valueOf(positionOfA + 1)).param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].name").value(namePrefix + "B"))
+                .andExpect(jsonPath("$.page").value(positionOfA + 1))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.totalPages").value(names.size()));
     }
 
     @Test
     void getProducts_NoType_ReturnsAllProducts() throws Exception {
         String id = createProduct(sampleLaptopCommand());
 
-        mockMvc.perform(get("/products"))
+        mockMvc.perform(get("/products").param("size", "100"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + id + "')]").exists());
+                .andExpect(jsonPath("$.items[?(@.id=='" + id + "')]").exists());
     }
 
     @Test
@@ -211,9 +248,9 @@ class ProductIntegrationTest {
 
         mockMvc.perform(get("/products/{id}", id))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(get("/products"))
+        mockMvc.perform(get("/products").param("size", "100"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + id + "')]").doesNotExist());
+                .andExpect(jsonPath("$.items[?(@.id=='" + id + "')]").doesNotExist());
         mockMvc.perform(put("/products/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"ProBook X15\",\"type\":\"COMPUTER\",\"basePrice\":{\"amount\":3999.00,\"currency\":\"PLN\"}}"))
@@ -226,9 +263,9 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.name").value("ProBook X15"))
                 .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value(startsWith("PBX15-I7-16")))
                 .andExpect(jsonPath("$.archivedAt").exists());
-        mockMvc.perform(get("/products/archived"))
+        mockMvc.perform(get("/products/archived").param("size", "100"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + id + "')]").exists());
+                .andExpect(jsonPath("$.items[?(@.id=='" + id + "')]").exists());
     }
 
     @Test
@@ -260,7 +297,7 @@ class ProductIntegrationTest {
         mockMvc.perform(delete("/products/{id}", accessoryId))
                 .andExpect(status().isNoContent());
         String addOns = """
-                [{"productId":"%s","name":"Mysz","price":{"amount":99.00,"currency":"PLN"},"vatRate":"VAT_23"}]
+                [{"productId":"%s"}]
                 """.formatted(accessoryId);
 
         mockMvc.perform(post("/products")
@@ -412,7 +449,7 @@ class ProductIntegrationTest {
     void addProduct_AddOnProductDoesNotExist_Returns400() throws Exception {
         UUID missingProductId = UUID.randomUUID();
         String addOns = """
-                [{"productId":"%s","name":"Mysz","price":{"amount":99.00,"currency":"PLN"},"vatRate":"VAT_23"}]
+                [{"productId":"%s"}]
                 """.formatted(missingProductId);
 
         mockMvc.perform(post("/products")
@@ -420,6 +457,119 @@ class ProductIntegrationTest {
                         .content(simpleComputerBody(uniqueStockKeepingUnit("PBX15"), addOns)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Add-on product with id " + missingProductId + " does not exist"));
+    }
+
+    @Test
+    void addProduct_SameStockKeepingUnitSentInParallel_CreatesOnlyOneProduct() throws Exception {
+        String body = simpleComputerBody(uniqueStockKeepingUnit("RACE"), "[]");
+        int requests = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(requests);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<Integer>> statuses = new ArrayList<>();
+        for (int request = 0; request < requests; request++) {
+            statuses.add(executor.submit(() -> {
+                start.await();
+                return mockMvc.perform(post("/products")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                        .andReturn().getResponse().getStatus();
+            }));
+        }
+        start.countDown();
+        List<Integer> results = new ArrayList<>();
+        for (Future<Integer> status : statuses) {
+            results.add(status.get(30, TimeUnit.SECONDS));
+        }
+        executor.shutdown();
+
+        assertAll(
+                () -> assertEquals(1, results.stream().filter(status -> status == 201).count()),
+                () -> assertEquals(requests - 1, results.stream().filter(status -> status == 409).count())
+        );
+    }
+
+    @Test
+    void addProduct_OptionsGivenOutOfPosition_ReturnsOptionsByPositionAndVariantsInGivenOrder() throws Exception {
+        String firstStockKeepingUnit = uniqueStockKeepingUnit("ORDER-B");
+        String secondStockKeepingUnit = uniqueStockKeepingUnit("ORDER-A");
+        String body = """
+                {"name":"ProBook X15","type":"COMPUTER","basePrice":{"amount":3999.00,"currency":"PLN"},
+                 "options":[{"name":"RAM","position":2,"values":["32","16"]},{"name":"Procesor","position":1,"values":["i7","i5"]}],
+                 "variants":[
+                   {"stockKeepingUnit":"%s","optionValues":{"RAM":"32","Procesor":"i7"},
+                    "price":{"amount":4999.00,"currency":"PLN"},"availability":"AVAILABLE","vatRate":"VAT_23"},
+                   {"stockKeepingUnit":"%s","optionValues":{"RAM":"16","Procesor":"i5"},
+                    "price":{"amount":3999.00,"currency":"PLN"},"availability":"AVAILABLE","vatRate":"VAT_23"}
+                 ]}
+                """.formatted(firstStockKeepingUnit, secondStockKeepingUnit);
+        String id = objectMapper.readTree(mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(get("/products/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.options[0].name").value("Procesor"))
+                .andExpect(jsonPath("$.options[0].values[0]").value("i7"))
+                .andExpect(jsonPath("$.options[0].values[1]").value("i5"))
+                .andExpect(jsonPath("$.options[1].name").value("RAM"))
+                .andExpect(jsonPath("$.variants[0].stockKeepingUnit").value(firstStockKeepingUnit))
+                .andExpect(jsonPath("$.variants[1].stockKeepingUnit").value(secondStockKeepingUnit));
+    }
+
+    @Test
+    void updateProduct_SameVariantIdTwice_Returns400() throws Exception {
+        String id = createProduct(sampleLaptopCommand());
+        String existingVariantId = firstVariantId(id);
+        String body = """
+                {"name":"ProBook X15","type":"COMPUTER","basePrice":{"amount":3999.00,"currency":"PLN"},
+                 "variants":[
+                   {"id":"%s","stockKeepingUnit":"%s","optionValues":{"Procesor":"i7"},
+                    "price":{"amount":4499.00,"currency":"PLN"},"availability":"AVAILABLE","vatRate":"VAT_23"},
+                   {"id":"%s","stockKeepingUnit":"%s","optionValues":{"Procesor":"i9"},
+                    "price":{"amount":5799.00,"currency":"PLN"},"availability":"AVAILABLE","vatRate":"VAT_23"}
+                 ]}
+                """.formatted(existingVariantId, uniqueStockKeepingUnit("PBX15-I7"), existingVariantId, uniqueStockKeepingUnit("PBX15-I9"));
+
+        mockMvc.perform(put("/products/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Variant " + existingVariantId + " is listed more than once"));
+    }
+
+    @Test
+    void addProduct_AddOnIsComputer_Returns400() throws Exception {
+        String laptopId = createProduct(sampleLaptopCommand());
+        String addOns = """
+                [{"productId":"%s","name":"Laptop","price":{"amount":3999.00,"currency":"PLN"},"vatRate":"VAT_23"}]
+                """.formatted(laptopId);
+
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(simpleComputerBody(uniqueStockKeepingUnit("PBX15"), addOns)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Add-on product " + laptopId
+                        + " is of type COMPUTER, but only ELECTRONICS products can be sold as add-ons"));
+    }
+
+    @Test
+    void getProducts_UnknownType_Returns400WithAllowedValues() throws Exception {
+        mockMvc.perform(get("/products").param("type", "FOO"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Invalid value FOO of parameter type, allowed values: [COMPUTER, SMARTPHONE, ELECTRONICS]"));
+    }
+
+    @Test
+    void unknownPathAndMethod_ReturnMessage() throws Exception {
+        mockMvc.perform(get("/unknown"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").exists());
+        mockMvc.perform(patch("/products"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.message").exists());
     }
 
     @Test

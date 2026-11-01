@@ -17,6 +17,7 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -82,7 +83,7 @@ class ProductCatalogAdapterRetryTest {
                      "variants":[{"id":"%s","stockKeepingUnit":"PBX15-I7-16","price":{"amount":4599.00,"currency":"PLN"},
                                   "availability":"AVAILABLE","vatRate":"VAT_23"}],
                      "addOns":[{"productId":"%s","name":"Kabel HDMI 2m","price":{"amount":39.00,"currency":"PLN"},
-                                "vatRate":"VAT_8"}]}
+                                "vatRate":"VAT_8","availability":"SOLD_OUT"}]}
                     """.formatted(productId, VARIANT_ID, ADD_ON_PRODUCT_ID));
         }
     }
@@ -137,7 +138,13 @@ class ProductCatalogAdapterRetryTest {
 
         assertAll(
                 () -> assertEquals(VatRate.VAT_23, result.findVariant(VARIANT_ID).orElseThrow().getVatRate()),
-                () -> assertEquals(VatRate.VAT_8, result.findAddOn(ADD_ON_PRODUCT_ID).orElseThrow().getVatRate())
+                () -> assertEquals(VatRate.VAT_8, result.findAddOn(ADD_ON_PRODUCT_ID).orElseThrow().getVatRate()),
+                () -> assertEquals(false, result.findAddOn(ADD_ON_PRODUCT_ID).orElseThrow().isAvailable())
         );
+    }
+
+    @Test
+    void findProduct_NotFound_ReturnsEmpty() {
+        assertEquals(Optional.empty(), productCatalogPort.findProduct(MISSING_PRODUCT_ID));
     }
 }

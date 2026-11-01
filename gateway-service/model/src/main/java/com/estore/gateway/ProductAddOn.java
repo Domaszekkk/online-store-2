@@ -13,4 +13,5 @@ public class ProductAddOn {
     private UUID productId;
     private String name;
     private Money price;
+    private String availability;
 }

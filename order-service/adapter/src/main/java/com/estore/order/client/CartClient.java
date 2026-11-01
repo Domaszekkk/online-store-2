@@ -1,9 +1,9 @@
 package com.estore.order.client;
 
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.UUID;
 
@@ -11,8 +11,8 @@ import java.util.UUID;
 public interface CartClient {
 
     @PostMapping("/carts/{id}/checkout")
-    CartResponse checkout(@PathVariable("id") UUID id);
+    CartResponse checkout(@PathVariable("id") UUID id, @RequestBody CheckoutPayload payload);
 
-    @GetMapping("/carts/{id}")
-    CartResponse getCart(@PathVariable("id") UUID id);
+    @PostMapping("/carts/{id}/refresh")
+    CartResponse refresh(@PathVariable("id") UUID id);
 }

@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -24,10 +25,15 @@ public class ProductCatalogAdapter implements ProductCatalogPort {
 
     @Override
     public ProductDetails getProduct(UUID productId) {
+        return findProduct(productId).orElseThrow(() -> new ProductNotFoundException(productId));
+    }
+
+    @Override
+    public Optional<ProductDetails> findProduct(UUID productId) {
         try {
-            return map(productClient.getProduct(productId));
+            return Optional.of(map(productClient.getProduct(productId)));
         } catch (FeignException.NotFound exception) {
-            throw new ProductNotFoundException(productId);
+            return Optional.empty();
         } catch (FeignException exception) {
             log.warn("Product service call failed for product {} (status {})", productId, exception.status(), exception);
             throw new ProductCatalogUnavailableException();
@@ -53,6 +59,7 @@ public class ProductCatalogAdapter implements ProductCatalogPort {
                         .name(addOn.name())
                         .price(money(addOn.price()))
                         .vatRate(vatRate(addOn.vatRate()))
+                        .availability(addOn.availability())
                         .build())
                 .toList();
 

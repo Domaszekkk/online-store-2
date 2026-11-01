@@ -1,6 +1,8 @@
 package com.estore.product.product;
 
 import com.estore.product.AddProductRequest;
+import com.estore.product.PageDto;
+import com.estore.product.PageQuery;
 import com.estore.product.ProductDto;
 import com.estore.product.ProductOptionDto;
 import com.estore.product.ProductService;
@@ -27,19 +29,28 @@ public class ProductController {
     private final ProductService productService;
     private final ProductMapper productMapper;
 
-    @Operation(summary = "Get products", description = "Returns all products, optionally filtered by type")
+    @Operation(summary = "Get products",
+            description = "Returns one page of products on sale sorted by name, optionally filtered by type")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Page of products returned (possibly empty)"),
+            @ApiResponse(responseCode = "400", description = "Unknown type, negative page or page size outside 1-100")
+    })
     @GetMapping
-    public List<ProductDto> getProducts(
+    public PageDto<ProductDto> getProducts(
             @Parameter(description = "Product type to filter by (COMPUTER, SMARTPHONE, ELECTRONICS)")
-            @RequestParam(required = false) ProductType type) {
-        return productMapper.toDtos(productService.getProducts(type));
+            @RequestParam(required = false) ProductType type,
+            @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size, from 1 to 100") @RequestParam(defaultValue = "20") int size) {
+        return productMapper.toPageDto(productService.getProducts(type, new PageQuery(page, size)));
     }
 
     @Operation(summary = "Get archived products",
-            description = "Returns products withdrawn from sale that are still kept for the retention period")
+            description = "Returns one page of products withdrawn from sale that are still kept for the retention period, newest first")
     @GetMapping("/archived")
-    public List<ProductDto> getArchivedProducts() {
-        return productMapper.toDtos(productService.getArchivedProducts());
+    public PageDto<ProductDto> getArchivedProducts(
+            @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size, from 1 to 100") @RequestParam(defaultValue = "20") int size) {
+        return productMapper.toPageDto(productService.getArchivedProducts(new PageQuery(page, size)));
     }
 
     @Operation(summary = "Get archived product by id",
@@ -79,7 +90,8 @@ public class ProductController {
     @Operation(summary = "Create a new product",
             description = "Creates a new product with its options, variants and add-ons; variant ids are assigned by the service. "
                     + "ELECTRONICS has exactly one variant and no options or add-ons; in other types every variant "
-                    + "has one allowed value for each option")
+                    + "has one allowed value for each option. An add-on is given only by the id of an ELECTRONICS product; "
+                    + "its name, price, VAT rate and availability are always taken from that product")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Product created successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid request or add-on referencing a non-existent product"),

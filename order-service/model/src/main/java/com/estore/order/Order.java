@@ -35,10 +35,19 @@ public class Order {
     private Money grandTotal;
     private String documentNumber;
     private Instant createdAt;
+    private long cartVersion;
 
     public static Order preview(PlaceOrderCommand command, CartDetails cart) {
         if (cart.getItems() == null || cart.getItems().isEmpty()) {
             throw new CartNotOrderableException(cart.getId(), "cart is empty");
+        }
+        List<String> unavailableProducts = cart.getItems().stream()
+                .filter(item -> !item.isAvailable())
+                .map(CartItemDetails::getProductName)
+                .toList();
+        if (!unavailableProducts.isEmpty()) {
+            throw new CartNotOrderableException(cart.getId(), "products no longer available: "
+                    + String.join(", ", unavailableProducts) + "; remove them from the cart");
         }
         List<OrderLine> lines = new ArrayList<>(cart.getItems().stream().map(OrderLine::fromCartItem).toList());
         Money itemsTotal = lines.stream()
@@ -57,6 +66,7 @@ public class Order {
                 .itemsTotal(itemsTotal)
                 .deliveryCost(deliveryCost)
                 .grandTotal(itemsTotal.add(deliveryCost))
+                .cartVersion(cart.getVersion())
                 .build();
     }
 

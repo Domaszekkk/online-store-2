@@ -30,7 +30,7 @@ body:json {
       { "stockKeepingUnit": "PBX15-I9-32-{{runId}}", "optionValues": { "Procesor": "i9", "RAM": "32GB" }, "price": { "amount": 5799.00, "currency": "PLN" }, "availability": "COMING_SOON", "vatRate": "VAT_23" }
     ],
     "addOns": [
-      { "productId": "{{addOnProductId}}", "name": "Kabel HDMI 2m", "price": { "amount": 39.00, "currency": "PLN" }, "vatRate": "VAT_8" }
+      { "productId": "{{addOnProductId}}" }
     ]
   }
 }
@@ -38,7 +38,10 @@ body:json {
 assert {
   res.status: eq 201
   res.body.variants.length: eq 2
-  res.body.addOns[0].vatRate: eq VAT_8
+  res.body.addOns[0].name: eq Kabel HDMI 2m
+  res.body.addOns[0].price.amount: eq 39
+  res.body.addOns[0].vatRate: eq VAT_23
+  res.body.addOns[0].availability: eq AVAILABLE
 }
 
 script:post-response {
@@ -51,6 +54,7 @@ script:post-response {
 }
 
 docs {
-  Laptop with two variants (i7 available, i9 coming soon) and the HDMI cable as an add-on with its own VAT rate (8%).
+  Laptop with two variants (i7 available, i9 coming soon) and the HDMI cable as an add-on.
+  The add-on is given only by the cable id; its name, price, VAT rate and availability always come from the cable product.
   Saves productId, variantId (available) and unavailableVariantId.
 }

@@ -16,6 +16,7 @@ public class CartDto {
     private String status;
     private List<CartItemDto> items;
     private MoneyDto total;
+    private long version;
     private Instant createdAt;
     private Instant updatedAt;
 }

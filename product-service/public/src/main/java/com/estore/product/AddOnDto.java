@@ -14,4 +14,5 @@ public class AddOnDto {
     private String name;
     private MoneyDto price;
     private String vatRate;
+    private String availability;
 }

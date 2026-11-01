@@ -1,0 +1,34 @@
+meta {
+  name: 17 Add laptop to that cart
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{gatewayUrl}}/shop/carts/{{changedCartId}}/items
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{variantId}}",
+    "quantity": 1
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.items[0].available: eq true
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("changedItemId", res.getBody().items[0].id);
+  }
+}

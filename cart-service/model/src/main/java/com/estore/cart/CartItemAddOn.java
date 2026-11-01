@@ -19,4 +19,11 @@ public class CartItemAddOn {
     public Money total() {
         return price.multiply(quantity);
     }
+
+    public boolean updatePrice(Money currentPrice, VatRate currentVatRate) {
+        boolean changed = price.amount().compareTo(currentPrice.amount()) != 0 || vatRate != currentVatRate;
+        this.price = currentPrice;
+        this.vatRate = currentVatRate;
+        return changed;
+    }
 }

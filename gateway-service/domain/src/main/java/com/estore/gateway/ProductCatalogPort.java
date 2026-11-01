@@ -1,10 +1,9 @@
 package com.estore.gateway;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ProductCatalogPort {
-    List<ProductSummary> findProducts(String type);
+    ResultPage<ProductSummary> findProducts(String type, int page, int size);
 
     ProductDetails getProduct(UUID id);
 }

@@ -14,4 +14,9 @@ public class AddOnDetails {
     private String name;
     private Money price;
     private VatRate vatRate;
+    private String availability;
+
+    public boolean isAvailable() {
+        return "AVAILABLE".equals(availability);
+    }
 }

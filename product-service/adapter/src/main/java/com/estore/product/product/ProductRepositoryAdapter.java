@@ -1,9 +1,14 @@
 package com.estore.product.product;
 
+import com.estore.product.PageQuery;
 import com.estore.product.Product;
 import com.estore.product.ProductRepositoryPort;
 import com.estore.product.ProductType;
+import com.estore.product.ResultPage;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,17 +45,37 @@ public class ProductRepositoryAdapter implements ProductRepositoryPort {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Product> findAllActive(ProductType type) {
-        List<ProductEntity> entities = (type == null)
-                ? productJpaRepository.findByArchivedAtIsNull()
-                : productJpaRepository.findByTypeAndArchivedAtIsNull(type);
-        return entities.stream().map(productMapper::toModel).toList();
+    public ResultPage<Product> findAllActive(ProductType type, PageQuery pageQuery) {
+        PageRequest pageRequest = PageRequest.of(pageQuery.page(), pageQuery.size(), Sort.by("name", "id"));
+        Page<ProductEntity> entities = (type == null)
+                ? productJpaRepository.findByArchivedAtIsNull(pageRequest)
+                : productJpaRepository.findByTypeAndArchivedAtIsNull(type, pageRequest);
+        return toResultPage(entities, pageQuery);
+    }
+
+    private ResultPage<Product> toResultPage(Page<ProductEntity> entities, PageQuery pageQuery) {
+        return new ResultPage<>(entities.stream().map(productMapper::toModel).toList(),
+                pageQuery.page(), pageQuery.size(), entities.getTotalElements());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public boolean existsActiveById(UUID id) {
-        return productJpaRepository.existsByIdAndArchivedAtIsNull(id);
+    public List<Product> findAllActiveByIds(Collection<UUID> ids) {
+        return productJpaRepository.findByIdInAndArchivedAtIsNull(ids).stream().map(productMapper::toModel).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isAddOnOfActiveProduct(UUID productId) {
+        return productJpaRepository.countActiveProductsWithAddOn(productId) > 0;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockStockKeepingUnits(Collection<String> stockKeepingUnits) {
+        stockKeepingUnits.stream()
+                .sorted()
+                .forEach(productJpaRepository::lockStockKeepingUnit);
     }
 
     @Override
@@ -68,8 +93,10 @@ public class ProductRepositoryAdapter implements ProductRepositoryPort {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Product> findAllArchived() {
-        return productJpaRepository.findByArchivedAtIsNotNull().stream().map(productMapper::toModel).toList();
+    public ResultPage<Product> findAllArchived(PageQuery pageQuery) {
+        PageRequest pageRequest = PageRequest.of(pageQuery.page(), pageQuery.size(),
+                Sort.by(Sort.Order.desc("archivedAt"), Sort.Order.asc("id")));
+        return toResultPage(productJpaRepository.findByArchivedAtIsNotNull(pageRequest), pageQuery);
     }
 
     @Override

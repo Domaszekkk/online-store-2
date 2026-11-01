@@ -19,4 +19,5 @@ public class OrderPreview {
     private Money itemsTotal;
     private Money deliveryCost;
     private Money grandTotal;
+    private long cartVersion;
 }

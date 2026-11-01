@@ -1,0 +1,41 @@
+meta {
+  name: 18 Create product with a laptop as add-on (400)
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{productServiceUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Smartfon X",
+    "type": "SMARTPHONE",
+    "basePrice": { "amount": 2999.00, "currency": "PLN" },
+    "options": [
+      { "name": "Kolor", "position": 1, "values": ["Czarny"] }
+    ],
+    "variants": [
+      { "stockKeepingUnit": "PHONE-X-{{runId}}", "optionValues": { "Kolor": "Czarny" }, "price": { "amount": 2999.00, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_23" }
+    ],
+    "addOns": [
+      { "productId": "{{productId}}" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: contains only ELECTRONICS products can be sold as add-ons
+}
+
+docs {
+  Add-ons are accessories, i.e. ELECTRONICS products with a single variant, so their availability is unambiguous.
+}

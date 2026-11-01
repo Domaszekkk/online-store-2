@@ -19,4 +19,5 @@ public class OrderPreviewDto {
     private MoneyDto itemsTotal;
     private MoneyDto deliveryCost;
     private MoneyDto grandTotal;
+    private long cartVersion;
 }

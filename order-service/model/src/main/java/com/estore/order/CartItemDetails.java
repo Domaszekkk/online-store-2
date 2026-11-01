@@ -22,4 +22,7 @@ public class CartItemDetails {
 
     @Builder.Default
     private List<CartItemAddOnDetails> addOns = new ArrayList<>();
+
+    @Builder.Default
+    private boolean available = true;
 }

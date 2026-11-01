@@ -47,7 +47,7 @@ class OrderIntegrationTest {
 
     private UUID checkoutReturnsTwoLaptopsAndOneCable() {
         UUID cartId = UUID.randomUUID();
-        when(cartPort.checkout(cartId)).thenReturn(CartDetails.builder()
+        when(cartPort.checkout(cartId, 1L)).thenReturn(CartDetails.builder()
                 .id(cartId)
                 .items(List.of(CartItemDetails.builder()
                         .productId(UUID.randomUUID()).variantId(UUID.randomUUID())
@@ -63,7 +63,7 @@ class OrderIntegrationTest {
 
     private String orderBody(UUID cartId, String email, String deliveryMethod) {
         return """
-                {"cartId":"%s",
+                {"cartId":"%s","cartVersion":1,
                  "customer":{"firstName":"Jan","lastName":"Kowalski","email":"%s","phone":"+48 600 100 200"},
                  "shippingAddress":{"street":"Marszałkowska 1","city":"Warszawa","postalCode":"00-001","country":"Polska"},
                  "paymentMethod":"BLIK","deliveryMethod":"%s"}
@@ -82,19 +82,21 @@ class OrderIntegrationTest {
     @Test
     void previewOrder_thenPlaceOrder_PreviewMatchesPlacedOrderAndCartStaysOpen() throws Exception {
         UUID cartId = checkoutReturnsTwoLaptopsAndOneCable();
-        CartDetails cart = cartPort.checkout(cartId);
-        when(cartPort.getCart(cartId)).thenReturn(cart);
+        CartDetails cart = cartPort.checkout(cartId, 1L);
+        cart.setVersion(1);
+        when(cartPort.refreshCart(cartId)).thenReturn(cart);
 
         mockMvc.perform(post("/orders/preview")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(orderBody(cartId, "preview@example.com", "PARCEL_LOCKER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderNumber").doesNotExist())
+                .andExpect(jsonPath("$.cartVersion").value(1))
                 .andExpect(jsonPath("$.lines[0].quantity").value(2))
                 .andExpect(jsonPath("$.deliveryCost.amount").value(12.99))
                 .andExpect(jsonPath("$.grandTotal.amount").value(9249.99));
         mockMvc.perform(get("/orders").param("email", "preview@example.com"))
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.items.length()").value(0));
 
         String id = placeOrder(cartId, "preview@example.com");
 
@@ -104,6 +106,28 @@ class OrderIntegrationTest {
                 .andExpect(status().isConflict());
         mockMvc.perform(get("/orders/{id}", id))
                 .andExpect(jsonPath("$.status").value("NEW"));
+    }
+
+    @Test
+    void previewOrder_CartWithUnavailableProduct_Returns409WithProductName() throws Exception {
+        UUID cartId = UUID.randomUUID();
+        when(cartPort.refreshCart(cartId)).thenReturn(CartDetails.builder()
+                .id(cartId)
+                .version(2)
+                .items(List.of(CartItemDetails.builder()
+                        .productId(UUID.randomUUID()).variantId(UUID.randomUUID())
+                        .productName("ProBook X15").stockKeepingUnit("PBX15-I7-16")
+                        .unitPrice(pln("4599.00")).vatRate(VatRate.VAT_23).quantity(1)
+                        .available(false)
+                        .build()))
+                .build());
+
+        mockMvc.perform(post("/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(orderBody(cartId, "unavailable@example.com", "COURIER")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Order cannot be placed from cart " + cartId
+                        + ": products no longer available: ProBook X15; remove them from the cart"));
     }
 
     @Test
@@ -169,7 +193,7 @@ class OrderIntegrationTest {
     void placeOrder_CartEmpty_Returns409AndSavesNothing() throws Exception {
         UUID cartId = UUID.randomUUID();
         String email = "conflict-" + UUID.randomUUID() + "@example.com";
-        when(cartPort.checkout(cartId))
+        when(cartPort.checkout(cartId, 1L))
                 .thenThrow(new CartNotOrderableException(cartId, "Cart with id " + cartId + " is empty and cannot be checked out"));
 
         mockMvc.perform(post("/orders")
@@ -179,7 +203,7 @@ class OrderIntegrationTest {
                 .andExpect(jsonPath("$.message").value(containsString("is empty")));
 
         mockMvc.perform(get("/orders").param("email", email))
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.items.length()").value(0));
     }
 
     @Test
@@ -196,9 +220,9 @@ class OrderIntegrationTest {
                 .andExpect(jsonPath("$.message").value(
                         "Order " + firstOrderNumber + " has already been placed from cart " + cartId));
 
-        verify(cartPort, times(1)).checkout(cartId);
+        verify(cartPort, times(1)).checkout(cartId, 1L);
         mockMvc.perform(get("/orders").param("email", email))
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.items.length()").value(1));
     }
 
     @Test
@@ -225,9 +249,13 @@ class OrderIntegrationTest {
 
         mockMvc.perform(get("/orders").param("email", email.toUpperCase()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].id").value(newerId))
-                .andExpect(jsonPath("$[1].id").value(olderId));
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].id").value(newerId))
+                .andExpect(jsonPath("$.items[1].id").value(olderId));
+        mockMvc.perform(get("/orders").param("email", email).param("page", "1").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(olderId))
+                .andExpect(jsonPath("$.totalPages").value(2));
     }
 
     @Test
@@ -236,7 +264,7 @@ class OrderIntegrationTest {
 
         mockMvc.perform(get("/orders"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id=='" + id + "')]").exists());
+                .andExpect(jsonPath("$.items[?(@.id=='" + id + "')]").exists());
     }
 
     @Test

@@ -27,6 +27,7 @@ public class CartEntity {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "cart_id")
+    @OrderColumn(name = "item_order")
     @Builder.Default
     private List<CartItemEntity> items = new ArrayList<>();
 
@@ -37,9 +38,15 @@ public class CartEntity {
     })
     private MoneyEmbeddable total;
 
+    @Column(name = "version")
+    private long version;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    @Column(name = "expires_at")
+    private Instant expiresAt;
 }

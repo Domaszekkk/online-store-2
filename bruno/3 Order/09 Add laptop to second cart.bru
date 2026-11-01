@@ -26,3 +26,9 @@ assert {
   res.status: eq 200
   res.body.total.amount: eq 4599
 }
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("secondCartVersion", res.getBody().version);
+  }
+}

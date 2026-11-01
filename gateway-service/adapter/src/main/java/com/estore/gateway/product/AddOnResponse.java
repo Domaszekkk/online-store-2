@@ -4,5 +4,5 @@ import com.estore.gateway.client.MoneyPayload;
 
 import java.util.UUID;
 
-public record AddOnResponse(UUID productId, String name, MoneyPayload price) {
+public record AddOnResponse(UUID productId, String name, MoneyPayload price, String availability) {
 }

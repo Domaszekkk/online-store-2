@@ -29,7 +29,7 @@ assert {
   res.status: eq 200
   res.body.total.amount: eq 9237
   res.body.items[0].vatRate: eq VAT_23
-  res.body.items[0].addOns[0].vatRate: eq VAT_8
+  res.body.items[0].addOns[0].vatRate: eq VAT_23
 }
 
 script:post-response {

@@ -4,6 +4,7 @@ import com.estore.cart.AddItemRequest;
 import com.estore.cart.CartDto;
 import com.estore.cart.CartService;
 import com.estore.cart.ChangeItemQuantityRequest;
+import com.estore.cart.CheckoutRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -24,7 +25,9 @@ public class CartController {
     private final CartService cartService;
     private final CartMapper cartMapper;
 
-    @Operation(summary = "Create a new cart", description = "Creates a new empty shopping cart")
+    @Operation(summary = "Create a new cart",
+            description = "Creates a new empty shopping cart; an active cart expires after 30 minutes without changes or order preview "
+                    + "and then every change returns 409")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Cart created successfully")
     })
@@ -85,16 +88,33 @@ public class CartController {
         return cartMapper.toDto(cartService.removeItem(id, itemId));
     }
 
+    @Operation(summary = "Refresh cart with the catalog",
+            description = "Brings prices and VAT rates of the items up to date with the product service and marks items whose product, "
+                    + "variant or add-on is no longer available; the version grows when anything changes. Used by order-service for the order summary")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Cart refreshed (a checked out cart is returned unchanged)"),
+            @ApiResponse(responseCode = "404", description = "Cart not found"),
+            @ApiResponse(responseCode = "503", description = "Product service is unavailable")
+    })
+    @PostMapping("/{id}/refresh")
+    public CartDto refresh(@Parameter(description = "Id of the cart") @PathVariable UUID id) {
+        return cartMapper.toDto(cartService.refresh(id));
+    }
+
     @Operation(summary = "Check out cart",
             description = "Closes the cart for ordering (status CHECKED_OUT) and returns its final content; used by order-service when an order is placed. "
+                    + "The cart must still have the version shown in the order summary and is checked against the catalog first. "
                     + "Idempotent: calling it again for a checked out cart returns the same content, so order-service can safely retry")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Cart checked out (now or earlier)"),
+            @ApiResponse(responseCode = "400", description = "Missing expected version"),
             @ApiResponse(responseCode = "404", description = "Cart not found"),
-            @ApiResponse(responseCode = "409", description = "Cart is empty")
+            @ApiResponse(responseCode = "409", description = "Cart is empty, has changed since the summary or contains unavailable products"),
+            @ApiResponse(responseCode = "503", description = "Product service is unavailable")
     })
     @PostMapping("/{id}/checkout")
-    public CartDto checkout(@Parameter(description = "Id of the cart") @PathVariable UUID id) {
-        return cartMapper.toDto(cartService.checkout(id));
+    public CartDto checkout(@Parameter(description = "Id of the cart") @PathVariable UUID id,
+                            @Valid @RequestBody CheckoutRequest request) {
+        return cartMapper.toDto(cartService.checkout(id, request.getExpectedVersion()));
     }
 }

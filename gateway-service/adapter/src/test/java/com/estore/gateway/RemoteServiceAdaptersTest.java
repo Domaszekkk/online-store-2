@@ -23,6 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -51,6 +52,7 @@ class RemoteServiceAdaptersTest {
     private static final UUID ORDER_WITHOUT_DOCUMENT_ID = UUID.randomUUID();
     private static final byte[] PDF_CONTENT = "%PDF-1.4 test".getBytes(StandardCharsets.US_ASCII);
     private static final Map<String, AtomicInteger> CALLS = new ConcurrentHashMap<>();
+    private static final AtomicReference<String> LAST_PRODUCTS_QUERY = new AtomicReference<>();
     private static final HttpServer SERVICES_STUB = startServicesStub();
 
     @Autowired
@@ -95,7 +97,8 @@ class RemoteServiceAdaptersTest {
         int callNumber = CALLS.computeIfAbsent(method + " " + path, key -> new AtomicInteger()).incrementAndGet();
 
         if (method.equals("GET") && path.equals("/products")) {
-            respond(exchange, 200, "[" + productBody(PRODUCT_ID) + "]");
+            LAST_PRODUCTS_QUERY.set(exchange.getRequestURI().getQuery());
+            respond(exchange, 200, "{\"items\":[" + productBody(PRODUCT_ID) + "],\"page\":2,\"size\":5,\"totalItems\":11,\"totalPages\":3}");
         } else if (method.equals("GET") && path.equals(productPath(MISSING_PRODUCT_ID))) {
             respond(exchange, 404, "{\"message\":\"Product with id " + MISSING_PRODUCT_ID + " not found\"}");
         } else if (method.equals("GET") && path.equals(productPath(FLAKY_PRODUCT_ID)) && callNumber == 1) {
@@ -153,7 +156,7 @@ class RemoteServiceAdaptersTest {
                   {"id":"%s","productId":"%s","variantId":"%s","productName":"ProBook X15",
                    "stockKeepingUnit":"PBX15-16","unitPrice":{"amount":4599.00,"currency":"PLN"},"vatRate":"VAT_23","quantity":2,
                    "addOns":[{"productId":"%s","name":"Kabel HDMI 2m","price":{"amount":39.00,"currency":"PLN"},"vatRate":"VAT_23","quantity":1}],
-                   "lineTotal":{"amount":9237.00,"currency":"PLN"}}],
+                   "lineTotal":{"amount":9237.00,"currency":"PLN"},"available":true}],
                  "total":{"amount":9237.00,"currency":"PLN"}}
                 """.formatted(cartId, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
     }
@@ -220,13 +223,15 @@ class RemoteServiceAdaptersTest {
 
     @Test
     void findProducts_DataCorrect_MapsSummary() {
-        List<ProductSummary> result = productCatalogPort.findProducts("COMPUTER");
+        ResultPage<ProductSummary> result = productCatalogPort.findProducts("COMPUTER", 2, 5);
 
         assertAll(
-                () -> assertEquals(1, result.size()),
-                () -> assertEquals(PRODUCT_ID, result.get(0).getId()),
-                () -> assertEquals("COMPUTER", result.get(0).getType()),
-                () -> assertEquals(0, new BigDecimal("4599.00").compareTo(result.get(0).getBasePrice().amount()))
+                () -> assertEquals("type=COMPUTER&page=2&size=5", LAST_PRODUCTS_QUERY.get()),
+                () -> assertEquals(1, result.items().size()),
+                () -> assertEquals(3, result.totalPages()),
+                () -> assertEquals(PRODUCT_ID, result.items().get(0).getId()),
+                () -> assertEquals("COMPUTER", result.items().get(0).getType()),
+                () -> assertEquals(0, new BigDecimal("4599.00").compareTo(result.items().get(0).getBasePrice().amount()))
         );
     }
 

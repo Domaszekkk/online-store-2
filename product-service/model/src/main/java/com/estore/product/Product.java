@@ -85,13 +85,44 @@ public class Product {
         return variants.stream().map(ProductVariant::getStockKeepingUnit).collect(Collectors.toSet());
     }
 
+    public Availability availability() {
+        if (hasVariantWith(Availability.AVAILABLE)) {
+            return Availability.AVAILABLE;
+        }
+        if (hasVariantWith(Availability.COMING_SOON)) {
+            return Availability.COMING_SOON;
+        }
+        return Availability.SOLD_OUT;
+    }
+
+    public AddOn asAddOn() {
+        ProductVariant variant = variants.stream()
+                .filter(candidate -> candidate.getAvailability() == Availability.AVAILABLE)
+                .findFirst()
+                .orElse(variants.get(0));
+        return AddOn.builder()
+                .productId(id)
+                .name(name)
+                .price(variant.getPrice())
+                .vatRate(variant.getVatRate())
+                .availability(availability())
+                .build();
+    }
+
+    private boolean hasVariantWith(Availability availability) {
+        return variants.stream().anyMatch(variant -> variant.getAvailability() == availability);
+    }
+
     private void assignVariantIds(List<ProductVariant> newVariants) {
         Set<UUID> ownVariantIds = variants.stream().map(ProductVariant::getId).collect(Collectors.toSet());
+        Set<UUID> requestedVariantIds = new HashSet<>();
         for (ProductVariant variant : newVariants) {
             if (variant.getId() == null) {
                 variant.setId(UUID.randomUUID());
             } else if (!ownVariantIds.contains(variant.getId())) {
                 throw InvalidProductException.unknownVariant(variant.getId(), id);
+            } else if (!requestedVariantIds.add(variant.getId())) {
+                throw InvalidProductException.duplicateVariantId(variant.getId());
             }
         }
     }

@@ -6,6 +6,7 @@ public record AddOnResponse(
         UUID productId,
         String name,
         MoneyPayload price,
-        String vatRate
+        String vatRate,
+        String availability
 ) {
 }

@@ -27,9 +27,9 @@ public class CartAdapter implements CartPort {
     private final JsonMapper jsonMapper;
 
     @Override
-    public CartDetails checkout(UUID cartId) {
+    public CartDetails checkout(UUID cartId, long expectedVersion) {
         try {
-            return map(cartClient.checkout(cartId));
+            return map(cartClient.checkout(cartId, new CheckoutPayload(expectedVersion)));
         } catch (FeignException.NotFound exception) {
             throw new CartNotFoundException(cartId);
         } catch (FeignException.Conflict exception) {
@@ -41,11 +41,13 @@ public class CartAdapter implements CartPort {
     }
 
     @Override
-    public CartDetails getCart(UUID cartId) {
+    public CartDetails refreshCart(UUID cartId) {
         try {
-            return map(cartClient.getCart(cartId));
+            return map(cartClient.refresh(cartId));
         } catch (FeignException.NotFound exception) {
             throw new CartNotFoundException(cartId);
+        } catch (FeignException.Conflict exception) {
+            throw new CartNotOrderableException(cartId, reasonFrom(exception));
         } catch (FeignException exception) {
             log.warn("Cart service call failed for cart {} (status {})", cartId, exception.status(), exception);
             throw new CartServiceUnavailableException();
@@ -84,10 +86,12 @@ public class CartAdapter implements CartPort {
                                         .quantity(addOn.quantity())
                                         .build())
                                 .toList())
+                        .available(item.available())
                         .build())
                 .toList();
         return CartDetails.builder()
                 .id(response.id())
+                .version(response.version())
                 .items(items)
                 .build();
     }

@@ -29,5 +29,6 @@ assert {
 script:post-response {
   if (res.getStatus() === 200) {
     bru.setEnvVar("retryItemId", res.getBody().items[0].id);
+    bru.setEnvVar("retryCartVersion", res.getBody().version);
   }
 }

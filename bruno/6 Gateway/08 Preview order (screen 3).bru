@@ -38,9 +38,16 @@ assert {
   res.body.lines[0].vatRate: isUndefined
   res.body.deliveryCost.amount: eq 19.99
   res.body.grandTotal.amount: eq 9256.99
+  res.body.cartVersion: isNumber
 }
 
 docs {
   Screen 3 (summary): the data from screen 2 together with products, prices, delivery cost and the total.
   Nothing is saved and the cart stays open; "Place order" on this screen sends the same data to POST /shop/orders.
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("gatewayCartVersion", res.getBody().cartVersion);
+  }
 }

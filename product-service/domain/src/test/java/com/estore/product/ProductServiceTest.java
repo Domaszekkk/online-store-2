@@ -3,6 +3,7 @@ package com.estore.product;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.math.BigDecimal;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -45,9 +47,7 @@ class ProductServiceTest {
     }
 
     private AddOn addOn(UUID addOnProductId) {
-        return AddOn.builder()
-                .productId(addOnProductId).name("Mysz")
-                .price(Money.of(new BigDecimal("99.00"), "PLN")).vatRate(VatRate.VAT_23).build();
+        return AddOn.builder().productId(addOnProductId).build();
     }
 
     private ProductVariant variant(UUID id, String stockKeepingUnit, Map<String, String> optionValues) {
@@ -85,6 +85,16 @@ class ProductServiceTest {
                 .basePrice(Money.of(new BigDecimal("3999.00"), "PLN"))
                 .options(new ArrayList<>(List.of(processorOption())))
                 .variants(new ArrayList<>(List.of(variant(variantId, "PBX15-I7", Map.of("Procesor", "i7")))))
+                .build();
+    }
+
+    private Product existingCable(UUID id, Availability availability) {
+        ProductVariant variant = variant(UUID.randomUUID(), "HDMI-2M", Map.of());
+        variant.setAvailability(availability);
+        return Product.builder()
+                .id(id).name("Kabel HDMI").type(ProductType.ELECTRONICS)
+                .basePrice(Money.of(new BigDecimal("39.00"), "PLN"))
+                .variants(new ArrayList<>(List.of(variant)))
                 .build();
     }
 
@@ -214,19 +224,96 @@ class ProductServiceTest {
     }
 
     @Test
-    void addProduct_AddOnProductExists_SavesProduct() {
+    void addProduct_StockKeepingUnitsChecked_LocksThemBeforeChecking() {
+        productService.addProduct(laptopCommand().build());
+
+        InOrder inOrder = Mockito.inOrder(productRepositoryPort);
+        inOrder.verify(productRepositoryPort).lockStockKeepingUnits(Set.of("PBX15-I7"));
+        inOrder.verify(productRepositoryPort).findStockKeepingUnitsUsedByOtherActiveProducts(eq(Set.of("PBX15-I7")), any(UUID.class));
+        inOrder.verify(productRepositoryPort).save(any(Product.class));
+    }
+
+    @Test
+    void addProduct_AddOnProductExists_SavesProductWithAddOnAvailability() {
         UUID addOnProductId = UUID.randomUUID();
-        when(productRepositoryPort.existsActiveById(addOnProductId)).thenReturn(true);
+        Product cable = existingCable(addOnProductId, Availability.AVAILABLE);
+        when(productRepositoryPort.findActiveById(addOnProductId)).thenReturn(Optional.of(cable));
+        when(productRepositoryPort.findAllActiveByIds(Set.of(addOnProductId))).thenReturn(List.of(cable));
 
         Product result = productService.addProduct(laptopCommand().addOns(List.of(addOn(addOnProductId))).build());
 
-        assertEquals(addOnProductId, result.getAddOns().get(0).getProductId());
+        assertAll(
+                () -> assertEquals(addOnProductId, result.getAddOns().get(0).getProductId()),
+                () -> assertEquals(Availability.AVAILABLE, result.getAddOns().get(0).getAvailability())
+        );
+    }
+
+    @Test
+    void addProduct_AddOnIsNotElectronics_ThrowsInvalidAddOnException() {
+        UUID addOnProductId = UUID.randomUUID();
+        when(productRepositoryPort.findActiveById(addOnProductId))
+                .thenReturn(Optional.of(existingLaptop(addOnProductId, UUID.randomUUID())));
+
+        InvalidAddOnException exception = Assertions.assertThrows(InvalidAddOnException.class,
+                () -> productService.addProduct(laptopCommand().addOns(List.of(addOn(addOnProductId))).build()));
+
+        assertEquals("Add-on product " + addOnProductId + " is of type COMPUTER, but only ELECTRONICS products can be sold as add-ons",
+                exception.getMessage());
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void addProduct_SameAddOnTwice_ThrowsInvalidAddOnException() {
+        UUID addOnProductId = UUID.randomUUID();
+        when(productRepositoryPort.findActiveById(addOnProductId))
+                .thenReturn(Optional.of(existingCable(addOnProductId, Availability.AVAILABLE)));
+
+        InvalidAddOnException exception = Assertions.assertThrows(InvalidAddOnException.class,
+                () -> productService.addProduct(laptopCommand()
+                        .addOns(List.of(addOn(addOnProductId), addOn(addOnProductId))).build()));
+
+        assertEquals("Add-on product " + addOnProductId + " is listed more than once", exception.getMessage());
+    }
+
+    @Test
+    void getProductById_AddOnSoldOut_ReturnsAddOnAsSoldOut() {
+        UUID id = UUID.randomUUID();
+        UUID addOnProductId = UUID.randomUUID();
+        Product laptop = existingLaptop(id, UUID.randomUUID());
+        laptop.setAddOns(new ArrayList<>(List.of(addOn(addOnProductId))));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(laptop));
+        when(productRepositoryPort.findAllActiveByIds(Set.of(addOnProductId)))
+                .thenReturn(List.of(existingCable(addOnProductId, Availability.SOLD_OUT)));
+
+        Product result = productService.getProductById(id);
+
+        AddOn addOn = result.getAddOns().get(0);
+        assertAll(
+                () -> assertEquals(Availability.SOLD_OUT, addOn.getAvailability()),
+                () -> assertEquals("Kabel HDMI", addOn.getName()),
+                () -> assertEquals(new BigDecimal("4599.00"), addOn.getPrice().amount()),
+                () -> assertEquals(VatRate.VAT_23, addOn.getVatRate())
+        );
+    }
+
+    @Test
+    void getProductById_AccessoryNoLongerOnSale_LeavesAddOnOut() {
+        UUID id = UUID.randomUUID();
+        UUID addOnProductId = UUID.randomUUID();
+        Product laptop = existingLaptop(id, UUID.randomUUID());
+        laptop.setAddOns(new ArrayList<>(List.of(addOn(addOnProductId))));
+        when(productRepositoryPort.findActiveById(id)).thenReturn(Optional.of(laptop));
+        when(productRepositoryPort.findAllActiveByIds(Set.of(addOnProductId))).thenReturn(List.of());
+
+        Product result = productService.getProductById(id);
+
+        assertEquals(0, result.getAddOns().size());
     }
 
     @Test
     void addProduct_AddOnProductDoesNotExist_ThrowsInvalidAddOnException() {
         UUID addOnProductId = UUID.randomUUID();
-        when(productRepositoryPort.existsActiveById(addOnProductId)).thenReturn(false);
+        when(productRepositoryPort.findActiveById(addOnProductId)).thenReturn(Optional.empty());
 
         InvalidAddOnException exception = Assertions.assertThrows(InvalidAddOnException.class,
                 () -> productService.addProduct(laptopCommand().addOns(List.of(addOn(addOnProductId))).build()));
@@ -275,27 +362,50 @@ class ProductServiceTest {
     }
 
     @Test
-    void getProducts_ByType_ReturnsProducts() {
-        when(productRepositoryPort.findAllActive(ProductType.COMPUTER))
-                .thenReturn(List.of(existingLaptop(UUID.randomUUID(), UUID.randomUUID())));
+    void getProducts_ByType_ReturnsPageOfProducts() {
+        PageQuery pageQuery = new PageQuery(0, 20);
+        when(productRepositoryPort.findAllActive(ProductType.COMPUTER, pageQuery))
+                .thenReturn(new ResultPage<>(List.of(existingLaptop(UUID.randomUUID(), UUID.randomUUID())), 0, 20, 1));
 
-        List<Product> result = productService.getProducts(ProductType.COMPUTER);
+        ResultPage<Product> result = productService.getProducts(ProductType.COMPUTER, pageQuery);
 
         assertAll(
-                () -> assertEquals(1, result.size()),
-                () -> assertEquals(ProductType.COMPUTER, result.get(0).getType())
+                () -> assertEquals(1, result.items().size()),
+                () -> assertEquals(ProductType.COMPUTER, result.items().get(0).getType()),
+                () -> assertEquals(1, result.totalPages())
         );
     }
 
     @Test
-    void getProducts_NoType_ReturnsAllProducts() {
+    void getProducts_NoType_ReturnsAllProductsOfThePage() {
+        PageQuery pageQuery = new PageQuery(1, 2);
         Product cable = Product.builder().id(UUID.randomUUID()).name("Cable HDMI").type(ProductType.ELECTRONICS).build();
-        when(productRepositoryPort.findAllActive(null))
-                .thenReturn(List.of(existingLaptop(UUID.randomUUID(), UUID.randomUUID()), cable));
+        when(productRepositoryPort.findAllActive(null, pageQuery))
+                .thenReturn(new ResultPage<>(List.of(existingLaptop(UUID.randomUUID(), UUID.randomUUID()), cable), 1, 2, 5));
 
-        List<Product> result = productService.getProducts(null);
+        ResultPage<Product> result = productService.getProducts(null, pageQuery);
 
-        assertEquals(2, result.size());
+        assertAll(
+                () -> assertEquals(2, result.items().size()),
+                () -> assertEquals(3, result.totalPages())
+        );
+    }
+
+    @Test
+    void pageQuery_SizeAboveLimit_ThrowsInvalidPageException() {
+        InvalidPageException exception = Assertions.assertThrows(InvalidPageException.class, () -> new PageQuery(0, 101));
+
+        assertAll(
+                () -> assertEquals(400, exception.getResponseCode()),
+                () -> assertEquals("Page size must be between 1 and 100, but was 101", exception.getMessage())
+        );
+    }
+
+    @Test
+    void pageQuery_NegativePage_ThrowsInvalidPageException() {
+        InvalidPageException exception = Assertions.assertThrows(InvalidPageException.class, () -> new PageQuery(-1, 20));
+
+        assertEquals("Page must be 0 or greater, but was -1", exception.getMessage());
     }
 
     @Test
@@ -381,6 +491,45 @@ class ProductServiceTest {
                 InvalidProductException.class, () -> productService.updateProduct(id, request));
 
         assertEquals("Variant " + foreignVariantId + " does not belong to product " + id, exception.getMessage());
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void updateProduct_SameVariantIdTwice_ThrowsInvalidProductException() {
+        UUID id = UUID.randomUUID();
+        UUID existingVariantId = UUID.randomUUID();
+        UpdateProductCommand request = UpdateProductCommand.builder()
+                .name("ProBook X15").type(ProductType.COMPUTER)
+                .variants(List.of(
+                        variant(existingVariantId, "PBX15-I7", Map.of("Procesor", "i7")),
+                        variant(existingVariantId, "PBX15-I9", Map.of("Procesor", "i9"))))
+                .build();
+        when(productRepositoryPort.findActiveByIdForUpdate(id)).thenReturn(Optional.of(existingLaptop(id, existingVariantId)));
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.updateProduct(id, request));
+
+        assertAll(
+                () -> assertEquals(400, exception.getResponseCode()),
+                () -> assertEquals("Variant " + existingVariantId + " is listed more than once", exception.getMessage())
+        );
+        verify(productRepositoryPort, never()).save(any());
+    }
+
+    @Test
+    void updateProduct_AddOnOfOtherProductChangedToComputer_ThrowsInvalidProductException() {
+        UUID id = UUID.randomUUID();
+        UpdateProductCommand request = UpdateProductCommand.builder()
+                .name("Kabel HDMI").type(ProductType.COMPUTER).build();
+        when(productRepositoryPort.findActiveByIdForUpdate(id))
+                .thenReturn(Optional.of(existingCable(id, Availability.AVAILABLE)));
+        when(productRepositoryPort.isAddOnOfActiveProduct(id)).thenReturn(true);
+
+        InvalidProductException exception = Assertions.assertThrows(
+                InvalidProductException.class, () -> productService.updateProduct(id, request));
+
+        assertEquals("Product " + id + " is an add-on of other products, so its type cannot change to COMPUTER; "
+                + "only ELECTRONICS products can be sold as add-ons", exception.getMessage());
         verify(productRepositoryPort, never()).save(any());
     }
 

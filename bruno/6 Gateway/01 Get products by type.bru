@@ -16,10 +16,12 @@ params:query {
 
 assert {
   res.status: eq 200
-  res.body: isNotEmpty
-  res.body[0].type: eq COMPUTER
-  res.body[0].basePrice: isDefined
-  res.body[0].variants: isUndefined
+  res.body.items: isNotEmpty
+  res.body.page: eq 0
+  res.body.size: eq 20
+  res.body.items[0].type: eq COMPUTER
+  res.body.items[0].basePrice: isDefined
+  res.body.items[0].variants: isUndefined
 }
 
 docs {

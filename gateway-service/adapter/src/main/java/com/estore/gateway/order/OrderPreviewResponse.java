@@ -12,5 +12,6 @@ public record OrderPreviewResponse(CustomerPayload customer,
                                    List<OrderLineResponse> lines,
                                    MoneyPayload itemsTotal,
                                    MoneyPayload deliveryCost,
-                                   MoneyPayload grandTotal) {
+                                   MoneyPayload grandTotal,
+                                   long cartVersion) {
 }

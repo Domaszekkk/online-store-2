@@ -6,6 +6,7 @@ import java.util.UUID;
 public record CartResponse(
         UUID id,
         String status,
+        long version,
         List<CartItemResponse> items
 ) {
 }

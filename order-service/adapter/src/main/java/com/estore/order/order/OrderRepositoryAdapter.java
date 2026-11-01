@@ -3,13 +3,17 @@ package com.estore.order.order;
 import com.estore.order.Order;
 import com.estore.order.OrderAlreadyPlacedException;
 import com.estore.order.OrderRepositoryPort;
+import com.estore.order.PageQuery;
+import com.estore.order.ResultPage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -55,16 +59,24 @@ public class OrderRepositoryAdapter implements OrderRepositoryPort {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Order> findAll() {
-        return orderJpaRepository.findAllByOrderByCreatedAtDesc().stream().map(orderMapper::toModel).toList();
+    public ResultPage<Order> findAll(PageQuery pageQuery) {
+        return toResultPage(orderJpaRepository.findAll(newestFirst(pageQuery)), pageQuery);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Order> findAllByCustomerEmail(String email) {
-        return orderJpaRepository.findAllByCustomerEmailIgnoreCaseOrderByCreatedAtDesc(email).stream()
-                .map(orderMapper::toModel)
-                .toList();
+    public ResultPage<Order> findAllByCustomerEmail(String email, PageQuery pageQuery) {
+        return toResultPage(orderJpaRepository.findAllByCustomerEmailIgnoreCase(email, newestFirst(pageQuery)), pageQuery);
+    }
+
+    private PageRequest newestFirst(PageQuery pageQuery) {
+        return PageRequest.of(pageQuery.page(), pageQuery.size(),
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.asc("id")));
+    }
+
+    private ResultPage<Order> toResultPage(Page<OrderEntity> entities, PageQuery pageQuery) {
+        return new ResultPage<>(entities.stream().map(orderMapper::toModel).toList(),
+                pageQuery.page(), pageQuery.size(), entities.getTotalElements());
     }
 
     @Override

@@ -21,4 +21,5 @@ public class CartItemDto {
     private int quantity;
     private List<CartItemAddOnDto> addOns;
     private MoneyDto lineTotal;
+    private boolean available;
 }

@@ -38,15 +38,28 @@ class ProductControllerTest {
     @Test
     void getProducts_ByType_Returns200WithSummaries() throws Exception {
         UUID id = UUID.randomUUID();
-        when(shopService.getProducts("COMPUTER")).thenReturn(List.of(ProductSummary.builder()
-                .id(id).name("ProBook X15").type("COMPUTER").basePrice(pln("4599.00")).build()));
+        when(shopService.getProducts("COMPUTER", 1, 10)).thenReturn(new ResultPage<>(List.of(ProductSummary.builder()
+                .id(id).name("ProBook X15").type("COMPUTER").basePrice(pln("4599.00")).build()), 1, 10, 11, 2));
 
-        mockMvc.perform(get("/shop/products").param("type", "COMPUTER"))
+        mockMvc.perform(get("/shop/products").param("type", "COMPUTER").param("page", "1").param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value(id.toString()))
-                .andExpect(jsonPath("$[0].name").value("ProBook X15"))
-                .andExpect(jsonPath("$[0].basePrice.amount").value(4599.00));
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(id.toString()))
+                .andExpect(jsonPath("$.items[0].name").value("ProBook X15"))
+                .andExpect(jsonPath("$.items[0].basePrice.amount").value(4599.00))
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.totalItems").value(11))
+                .andExpect(jsonPath("$.totalPages").value(2));
+    }
+
+    @Test
+    void getProducts_PageSizeRejectedByProductService_Returns400WithItsMessage() throws Exception {
+        when(shopService.getProducts(null, 0, 500))
+                .thenThrow(new ServiceRejectedRequestException("Page size must be between 1 and 100, but was 500", 400));
+
+        mockMvc.perform(get("/shop/products").param("size", "500"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Page size must be between 1 and 100, but was 500"));
     }
 
     @Test
@@ -86,7 +99,7 @@ class ProductControllerTest {
 
     @Test
     void getProducts_ProductServiceDown_Returns503() throws Exception {
-        when(shopService.getProducts(null)).thenThrow(new ServiceUnavailableException("product-service"));
+        when(shopService.getProducts(null, 0, 20)).thenThrow(new ServiceUnavailableException("product-service"));
 
         mockMvc.perform(get("/shop/products"))
                 .andExpect(status().isServiceUnavailable())

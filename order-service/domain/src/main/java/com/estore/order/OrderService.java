@@ -14,12 +14,12 @@ public class OrderService {
 
     public Order previewOrder(PlaceOrderCommand command) {
         requireOrderCanBePlaced(command);
-        return Order.preview(command, cartPort.getCart(command.getCartId()));
+        return Order.preview(command, cartPort.refreshCart(command.getCartId()));
     }
 
     public Order placeOrder(PlaceOrderCommand command) {
         requireOrderCanBePlaced(command);
-        CartDetails cart = cartPort.checkout(command.getCartId());
+        CartDetails cart = cartPort.checkout(command.getCartId(), command.getCartVersion());
         return transactionPort.inTransaction(() -> {
             Order order = Order.place(command, cart, orderRepositoryPort.nextOrderSequenceNumber());
             Order savedOrder = orderRepositoryPort.save(order);
@@ -50,11 +50,11 @@ public class OrderService {
                 .orElseThrow(() -> new OrderNotFoundException(id));
     }
 
-    public List<Order> getOrders(String customerEmail) {
+    public ResultPage<Order> getOrders(String customerEmail, PageQuery pageQuery) {
         if (customerEmail == null || customerEmail.isBlank()) {
-            return orderRepositoryPort.findAll();
+            return orderRepositoryPort.findAll(pageQuery);
         }
-        return orderRepositoryPort.findAllByCustomerEmail(customerEmail.trim());
+        return orderRepositoryPort.findAllByCustomerEmail(customerEmail.trim(), pageQuery);
     }
 
     public List<DeliveryMethod> getDeliveryMethods() {

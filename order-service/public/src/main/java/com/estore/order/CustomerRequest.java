@@ -26,6 +26,8 @@ public class CustomerRequest {
     private String email;
 
     @NotBlank
-    @Pattern(regexp = "\\+?[0-9 ]{9,20}", message = "must contain 9 to 20 digits or spaces, optionally starting with +")
+    @Size(max = 20)
+    @Pattern(regexp = "\\+?\\d( ?\\d){8,14}",
+            message = "must contain 9 to 15 digits, optionally starting with + and separated by single spaces")
     private String phone;
 }

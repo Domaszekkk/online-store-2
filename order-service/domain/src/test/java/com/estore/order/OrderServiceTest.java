@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -86,6 +87,7 @@ class OrderServiceTest {
     private PlaceOrderCommand command(UUID cartId, DeliveryMethod deliveryMethod, BillingAddress billingAddress) {
         return PlaceOrderCommand.builder()
                 .cartId(cartId)
+                .cartVersion(1L)
                 .customer(Customer.builder()
                         .firstName("Jan").lastName("Kowalski").email("jan.kowalski@example.com").phone("+48 600 100 200")
                         .build())
@@ -99,7 +101,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_DataCorrect_SnapshotsCartAndComputesTotals() {
         UUID cartId = UUID.randomUUID();
-        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId, 1L)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.COURIER, null));
 
@@ -128,7 +130,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_NoBillingAddress_OrderHasNoBillingAddress() {
         UUID cartId = UUID.randomUUID();
-        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId, 1L)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.COURIER, null));
 
@@ -138,7 +140,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_SeparateBillingAddress_KeepsBillingAddress() {
         UUID cartId = UUID.randomUUID();
-        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId, 1L)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.COURIER, billingAddress("Firmowa 5", null, null)));
 
@@ -152,7 +154,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_CompanyBillingAddress_KeepsCompanyData() {
         UUID cartId = UUID.randomUUID();
-        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId, 1L)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.COURIER,
                 billingAddress("Firmowa 5", "Kowalski Sp. z o.o.", "5260250274")));
@@ -173,7 +175,7 @@ class OrderServiceTest {
                         billingAddress("Firmowa 5", "Kowalski Sp. z o.o.", null))));
 
         assertEquals(400, exception.getResponseCode());
-        verify(cartPort, never()).checkout(any());
+        verify(cartPort, never()).checkout(any(), anyLong());
         verify(orderRepositoryPort, never()).save(any());
     }
 
@@ -186,13 +188,13 @@ class OrderServiceTest {
                         billingAddress("Firmowa 5", "Kowalski Sp. z o.o.", "5260250275"))));
 
         assertEquals(400, exception.getResponseCode());
-        verify(cartPort, never()).checkout(any());
+        verify(cartPort, never()).checkout(any(), anyLong());
     }
 
     @Test
     void placeOrder_Pickup_DeliveryIsFree() {
         UUID cartId = UUID.randomUUID();
-        when(cartPort.checkout(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.checkout(cartId, 1L)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.placeOrder(command(cartId, DeliveryMethod.PICKUP, null));
 
@@ -205,7 +207,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_CartEmpty_ThrowsCartNotOrderableExceptionAndSavesNothing() {
         UUID cartId = UUID.randomUUID();
-        when(cartPort.checkout(cartId))
+        when(cartPort.checkout(cartId, 1L))
                 .thenReturn(CartDetails.builder().id(cartId).items(new ArrayList<>()).build());
 
         CartNotOrderableException exception = Assertions.assertThrows(CartNotOrderableException.class,
@@ -218,7 +220,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_CartServiceRejectsCheckout_PropagatesAndSavesNothing() {
         UUID cartId = UUID.randomUUID();
-        when(cartPort.checkout(cartId))
+        when(cartPort.checkout(cartId, 1L))
                 .thenThrow(new CartNotOrderableException(cartId, "cart is already checked out"));
 
         CartNotOrderableException exception = Assertions.assertThrows(CartNotOrderableException.class,
@@ -243,7 +245,7 @@ class OrderServiceTest {
                 () -> assertEquals(409, exception.getResponseCode()),
                 () -> assertEquals("Order ORD-2026-000007 has already been placed from cart " + cartId, exception.getMessage())
         );
-        verify(cartPort, never()).checkout(any());
+        verify(cartPort, never()).checkout(any(), anyLong());
         verify(orderRepositoryPort, never()).save(any());
     }
 
@@ -259,21 +261,28 @@ class OrderServiceTest {
     }
 
     @Test
-    void getOrders_NoEmail_ReturnsAllOrders() {
-        List<Order> orders = List.of(new Order(), new Order());
-        when(orderRepositoryPort.findAll()).thenReturn(orders);
+    void getOrders_NoEmail_ReturnsPageOfAllOrders() {
+        PageQuery pageQuery = new PageQuery(0, 20);
+        ResultPage<Order> orders = new ResultPage<>(List.of(new Order(), new Order()), 0, 20, 2);
+        when(orderRepositoryPort.findAll(pageQuery)).thenReturn(orders);
 
-        assertEquals(orders, orderService.getOrders(null));
-        assertEquals(orders, orderService.getOrders("  "));
-        verify(orderRepositoryPort, never()).findAllByCustomerEmail(any());
+        assertEquals(orders, orderService.getOrders(null, pageQuery));
+        assertEquals(orders, orderService.getOrders("  ", pageQuery));
+        verify(orderRepositoryPort, never()).findAllByCustomerEmail(any(), any());
     }
 
     @Test
-    void getOrders_Email_ReturnsOrdersOfThatCustomer() {
-        List<Order> orders = List.of(new Order());
-        when(orderRepositoryPort.findAllByCustomerEmail("jan.kowalski@example.com")).thenReturn(orders);
+    void getOrders_Email_ReturnsPageOfOrdersOfThatCustomer() {
+        PageQuery pageQuery = new PageQuery(2, 10);
+        ResultPage<Order> orders = new ResultPage<>(List.of(new Order()), 2, 10, 21);
+        when(orderRepositoryPort.findAllByCustomerEmail("jan.kowalski@example.com", pageQuery)).thenReturn(orders);
 
-        assertEquals(orders, orderService.getOrders(" jan.kowalski@example.com "));
+        ResultPage<Order> result = orderService.getOrders(" jan.kowalski@example.com ", pageQuery);
+
+        assertAll(
+                () -> assertEquals(orders, result),
+                () -> assertEquals(3, result.totalPages())
+        );
     }
 
     @Test
@@ -303,7 +312,7 @@ class OrderServiceTest {
     void previewOrder_DataCorrect_ReturnsSummaryWithoutPlacingOrder() {
         UUID cartId = UUID.randomUUID();
         when(orderRepositoryPort.findByCartId(cartId)).thenReturn(Optional.empty());
-        when(cartPort.getCart(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
+        when(cartPort.refreshCart(cartId)).thenReturn(cartWithTwoLaptopsAndOneCable(cartId));
 
         Order result = orderService.previewOrder(command(cartId, DeliveryMethod.COURIER, null));
 
@@ -317,7 +326,7 @@ class OrderServiceTest {
                 () -> assertAmount("19.99", result.getDeliveryCost()),
                 () -> assertAmount("9256.99", result.getGrandTotal())
         );
-        verify(cartPort, never()).checkout(any());
+        verify(cartPort, never()).checkout(any(), anyLong());
         verify(orderRepositoryPort, never()).save(any());
         verify(orderEventPort, never()).orderPlaced(any());
     }
@@ -332,7 +341,7 @@ class OrderServiceTest {
                 () -> orderService.previewOrder(command(cartId, DeliveryMethod.COURIER, null)));
 
         assertEquals(409, exception.getResponseCode());
-        verify(cartPort, never()).getCart(any());
+        verify(cartPort, never()).refreshCart(any());
     }
 
     @Test
@@ -343,14 +352,14 @@ class OrderServiceTest {
 
         Assertions.assertThrows(InvalidBillingAddressException.class, () -> orderService.previewOrder(command));
 
-        verify(cartPort, never()).getCart(any());
+        verify(cartPort, never()).refreshCart(any());
     }
 
     @Test
     void previewOrder_EmptyCart_ThrowsCartNotOrderableException() {
         UUID cartId = UUID.randomUUID();
         when(orderRepositoryPort.findByCartId(cartId)).thenReturn(Optional.empty());
-        when(cartPort.getCart(cartId)).thenReturn(CartDetails.builder().id(cartId).items(new ArrayList<>()).build());
+        when(cartPort.refreshCart(cartId)).thenReturn(CartDetails.builder().id(cartId).items(new ArrayList<>()).build());
 
         CartNotOrderableException exception = Assertions.assertThrows(CartNotOrderableException.class,
                 () -> orderService.previewOrder(command(cartId, DeliveryMethod.COURIER, null)));

@@ -48,6 +48,7 @@ public class CartItemEntity {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "cart_item_id")
+    @OrderBy("id ASC")
     @Builder.Default
     private List<CartItemAddOnEntity> addOns = new ArrayList<>();
 
@@ -57,4 +58,7 @@ public class CartItemEntity {
             @AttributeOverride(name = "currency", column = @Column(name = "line_total_currency", length = 3))
     })
     private MoneyEmbeddable lineTotal;
+
+    @Column(name = "available")
+    private boolean available;
 }

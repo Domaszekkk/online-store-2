@@ -48,6 +48,7 @@ public class OrderLineEntity {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "order_line_id")
+    @OrderBy("id ASC")
     @Builder.Default
     private List<OrderLineAddOnEntity> addOns = new ArrayList<>();
 

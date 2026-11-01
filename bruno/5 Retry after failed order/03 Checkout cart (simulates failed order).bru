@@ -6,8 +6,18 @@ meta {
 
 post {
   url: {{cartServiceUrl}}/carts/{{retryCartId}}/checkout
-  body: none
+  body: json
   auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "expectedVersion": {{retryCartVersion}}
+  }
 }
 
 assert {
@@ -17,4 +27,5 @@ assert {
 
 docs {
   Normally only order-service calls this. Calling it by hand gives the state after a failed order: cart closed, no order.
+  expectedVersion is the cart version from request 02, the one the customer saw in the order summary.
 }

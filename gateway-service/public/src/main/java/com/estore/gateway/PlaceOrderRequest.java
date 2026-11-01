@@ -13,6 +13,8 @@ import java.util.UUID;
 public class PlaceOrderRequest {
     @NotNull
     private UUID cartId;
+    @NotNull(groups = OrderPlacement.class)
+    private Long cartVersion;
     @NotNull
     private CustomerRequest customer;
     @NotNull

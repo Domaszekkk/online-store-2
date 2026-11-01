@@ -2,7 +2,6 @@ package com.estore.gateway;
 
 import lombok.RequiredArgsConstructor;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,8 +12,8 @@ public class ShopService {
     private final OrderPort orderPort;
     private final DocumentPort documentPort;
 
-    public List<ProductSummary> getProducts(String type) {
-        return productCatalogPort.findProducts(type);
+    public ResultPage<ProductSummary> getProducts(String type, int page, int size) {
+        return productCatalogPort.findProducts(type, page, size);
     }
 
     public ProductDetails getProduct(UUID productId) {

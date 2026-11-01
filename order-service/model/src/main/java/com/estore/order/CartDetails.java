@@ -13,6 +13,7 @@ import java.util.UUID;
 @Builder
 public class CartDetails {
     private UUID id;
+    private long version;
 
     @Builder.Default
     private List<CartItemDetails> items = new ArrayList<>();

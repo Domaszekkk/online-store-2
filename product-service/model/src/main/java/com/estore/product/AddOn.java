@@ -14,4 +14,5 @@ public class AddOn {
     private String name;
     private Money price;
     private VatRate vatRate;
+    private Availability availability;
 }

@@ -61,6 +61,7 @@ class ProductControllerTest {
                         .name("Mysz")
                         .price(Money.of(new BigDecimal("99.00"), "PLN"))
                         .vatRate(VatRate.VAT_8)
+                        .availability(Availability.AVAILABLE)
                         .build()))
                 .build();
     }
@@ -110,26 +111,39 @@ class ProductControllerTest {
     }
 
     @Test
-    void getProducts_ByType_Returns200() throws Exception {
-        when(productService.getProducts(ProductType.COMPUTER)).thenReturn(List.of(sampleProduct(UUID.randomUUID())));
+    void getProducts_ByType_Returns200WithFirstPageByDefault() throws Exception {
+        when(productService.getProducts(ProductType.COMPUTER, new PageQuery(0, 20)))
+                .thenReturn(new ResultPage<>(List.of(sampleProduct(UUID.randomUUID())), 0, 20, 21));
 
         mockMvc.perform(get("/products").param("type", "COMPUTER"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].type").value("COMPUTER"));
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].type").value("COMPUTER"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalItems").value(21))
+                .andExpect(jsonPath("$.totalPages").value(2));
+    }
+
+    @Test
+    void getProducts_PageSizeAboveLimit_Returns400() throws Exception {
+        mockMvc.perform(get("/products").param("size", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Page size must be between 1 and 100, but was 101"));
     }
 
     @Test
     void getArchivedProducts_Returns200WithArchiveDate() throws Exception {
         Product product = sampleProduct(UUID.randomUUID());
         product.archive(Instant.parse("2026-10-22T10:00:00Z"));
-        when(productService.getArchivedProducts()).thenReturn(List.of(product));
+        when(productService.getArchivedProducts(new PageQuery(1, 5))).thenReturn(new ResultPage<>(List.of(product), 1, 5, 6));
 
-        mockMvc.perform(get("/products/archived"))
+        mockMvc.perform(get("/products/archived").param("page", "1").param("size", "5"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].name").value("ProBook X15"))
-                .andExpect(jsonPath("$[0].archivedAt").value("2026-10-22T10:00:00Z"));
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].name").value("ProBook X15"))
+                .andExpect(jsonPath("$.items[0].archivedAt").value("2026-10-22T10:00:00Z"))
+                .andExpect(jsonPath("$.page").value(1));
     }
 
     @Test

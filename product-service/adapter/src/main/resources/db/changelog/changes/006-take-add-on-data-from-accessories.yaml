@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: 015-drop-copied-add-on-data
+      author: estore
+      comment: "Add-on name, price and VAT rate are taken from the accessory product, so the copies typed in by hand are dropped"
+      changes:
+        - dropColumn:
+            tableName: add_ons
+            columnName: name
+        - dropColumn:
+            tableName: add_ons
+            columnName: price_amount
+        - dropColumn:
+            tableName: add_ons
+            columnName: price_currency
+        - dropColumn:
+            tableName: add_ons
+            columnName: vat_rate
+      rollback:
+        - addColumn:
+            tableName: add_ons
+            columns:
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: price_amount
+                  type: numeric(19, 2)
+              - column:
+                  name: price_currency
+                  type: VARCHAR(3)
+              - column:
+                  name: vat_rate
+                  type: VARCHAR(20)

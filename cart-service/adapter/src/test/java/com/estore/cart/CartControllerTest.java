@@ -211,9 +211,11 @@ class CartControllerTest {
         UUID cartId = UUID.randomUUID();
         Cart cart = cartWithItem(cartId);
         cart.setStatus(CartStatus.CHECKED_OUT);
-        when(cartService.checkout(cartId)).thenReturn(cart);
+        when(cartService.checkout(cartId, 1)).thenReturn(cart);
 
-        mockMvc.perform(post("/carts/{id}/checkout", cartId))
+        mockMvc.perform(post("/carts/{id}/checkout", cartId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CHECKED_OUT"))
                 .andExpect(jsonPath("$.items[0].stockKeepingUnit").value("PBX15-I7-16"));
@@ -222,9 +224,11 @@ class CartControllerTest {
     @Test
     void checkout_EmptyCart_Returns409() throws Exception {
         UUID cartId = UUID.randomUUID();
-        when(cartService.checkout(cartId)).thenThrow(new EmptyCartException(cartId));
+        when(cartService.checkout(cartId, 0)).thenThrow(new EmptyCartException(cartId));
 
-        mockMvc.perform(post("/carts/{id}/checkout", cartId))
+        mockMvc.perform(post("/carts/{id}/checkout", cartId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":0}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("Cart with id " + cartId + " is empty and cannot be checked out"));
     }
