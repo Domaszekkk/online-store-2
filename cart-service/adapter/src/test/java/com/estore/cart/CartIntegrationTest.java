@@ -1,0 +1,372 @@
+package com.estore.cart;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@Import(TestcontainersConfiguration.class)
+class CartIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private CartService cartService;
+    @Autowired
+    private CartRepositoryPort cartRepositoryPort;
+    @MockitoBean
+    private ProductCatalogPort productCatalogPort;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Test
+    void cartInactiveLongAgo_IsExpiredRejectedAndDeletedAfterRetention() throws Exception {
+        Instant lastActivity = Instant.now().minus(Duration.ofDays(8));
+        Cart cart = cartRepositoryPort.save(Cart.createNew(lastActivity, lastActivity.plus(Duration.ofMinutes(30))));
+
+        mockMvc.perform(get("/carts/{id}", cart.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("EXPIRED"));
+        mockMvc.perform(post("/carts/{id}/items", cart.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"%s\",\"variantId\":\"%s\",\"quantity\":1}".formatted(UUID.randomUUID(), UUID.randomUUID())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Cart with id " + cart.getId()
+                        + " has expired because of inactivity, create a new cart"));
+
+        assertTrue(cartService.expireInactiveCarts() >= 1);
+        assertTrue(cartService.deleteExpiredCarts() >= 1);
+        mockMvc.perform(get("/carts/{id}", cart.getId()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void createCart_ReturnsExpirationThirtyMinutesAhead() throws Exception {
+        String cartId = createCart();
+
+        Cart cart = cartService.getCartById(UUID.fromString(cartId));
+
+        long minutesLeft = Duration.between(Instant.now(), cart.getExpiresAt()).toMinutes();
+        assertTrue(minutesLeft >= 29 && minutesLeft <= 30, "minutes left: " + minutesLeft);
+    }
+
+    private String createCart() throws Exception {
+        String response = mockMvc.perform(post("/carts"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response).get("id").asText();
+    }
+
+    private ProductDetails product(UUID productId, UUID variantId, String availability) {
+        return ProductDetails.builder()
+                .id(productId).name("ProBook X15")
+                .variants(List.of(VariantDetails.builder()
+                        .id(variantId).stockKeepingUnit("PBX15-I7-16")
+                        .price(Money.of(new BigDecimal("4599.00"), "PLN"))
+                        .availability(availability).vatRate(VatRate.VAT_23).build()))
+                .build();
+    }
+
+    @Test
+    void addItem_thenGetCart_persistsItemAndTotal() throws Exception {
+        String cartId = createCart();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+
+        String body = "{\"productId\":\"%s\",\"variantId\":\"%s\",\"quantity\":2}".formatted(productId, variantId);
+
+        mockMvc.perform(post("/carts/{id}/items", cartId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].quantity").value(2))
+                .andExpect(jsonPath("$.items[0].stockKeepingUnit").value("PBX15-I7-16"))
+                .andExpect(jsonPath("$.total.amount").value(9198.00));
+
+        mockMvc.perform(get("/carts/{id}", cartId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].variantId").value(variantId.toString()));
+    }
+
+    @Test
+    void addItem_VariantNotAvailable_Returns409() throws Exception {
+        String cartId = createCart();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "COMING_SOON"));
+
+        AddItemRequest request = AddItemRequest.builder()
+                .productId(productId).variantId(variantId).quantity(1).build();
+
+        mockMvc.perform(post("/carts/{id}/items", cartId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    void getCartById_CartNotFound_Returns404() throws Exception {
+        mockMvc.perform(get("/carts/{id}", UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    void addSameItemTwice_thenChangeQuantity_thenRemove_persistsEachStep() throws Exception {
+        String cartId = createCart();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+        String body = "{\"productId\":\"%s\",\"variantId\":\"%s\",\"quantity\":1}".formatted(productId, variantId);
+
+        mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+        String response = mockMvc.perform(post("/carts/{id}/items", cartId)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].quantity").value(2))
+                .andReturn().getResponse().getContentAsString();
+        String itemId = objectMapper.readTree(response).get("items").get(0).get("id").asText();
+
+        mockMvc.perform(patch("/carts/{id}/items/{itemId}", cartId, itemId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"quantity\":3}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/carts/{id}", cartId))
+                .andExpect(jsonPath("$.items[0].quantity").value(3))
+                .andExpect(jsonPath("$.total.amount").value(13797.00));
+
+        mockMvc.perform(delete("/carts/{id}/items/{itemId}", cartId, itemId))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/carts/{id}", cartId))
+                .andExpect(jsonPath("$.items.length()").value(0))
+                .andExpect(jsonPath("$.total.amount").value(0));
+    }
+
+    @Test
+    void addTwoLaptopsWithOneCable_persistsAddOnQuantity() throws Exception {
+        String cartId = createCart();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        UUID cableId = UUID.randomUUID();
+        ProductDetails laptop = product(productId, variantId, "AVAILABLE");
+        laptop.setAddOns(List.of(AddOnDetails.builder()
+                .productId(cableId).name("Kabel HDMI 2m")
+                .price(Money.of(new BigDecimal("39.00"), "PLN")).vatRate(VatRate.VAT_8).availability("AVAILABLE").build()));
+        when(productCatalogPort.getProduct(productId)).thenReturn(laptop);
+        String body = """
+                {"productId":"%s","variantId":"%s","quantity":2,
+                 "addOns":[{"productId":"%s","quantity":1}]}
+                """.formatted(productId, variantId, cableId);
+
+        mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/carts/{id}", cartId))
+                .andExpect(jsonPath("$.items[0].quantity").value(2))
+                .andExpect(jsonPath("$.items[0].addOns[0].quantity").value(1))
+                .andExpect(jsonPath("$.items[0].vatRate").value("VAT_23"))
+                .andExpect(jsonPath("$.items[0].addOns[0].vatRate").value("VAT_8"))
+                .andExpect(jsonPath("$.items[0].lineTotal.amount").value(9237.00))
+                .andExpect(jsonPath("$.total.amount").value(9237.00));
+    }
+
+    @Test
+    void addItem_InvalidPayload_Returns400() throws Exception {
+        String cartId = createCart();
+
+        mockMvc.perform(post("/carts/{id}/items", cartId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"quantity\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Validation failed: ")));
+    }
+
+    @Test
+    void checkout_thenModifyReturns409AndCheckoutAgainReturnsSameContent() throws Exception {
+        String cartId = createCart();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+        when(productCatalogPort.findProduct(productId)).thenReturn(Optional.of(product(productId, variantId, "AVAILABLE")));
+        String body = "{\"productId\":\"%s\",\"variantId\":\"%s\",\"quantity\":1}".formatted(productId, variantId);
+
+        mockMvc.perform(post("/carts/{id}/checkout", cartId).contentType(MediaType.APPLICATION_JSON).content(checkoutBody(0)))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(1));
+        mockMvc.perform(post("/carts/{id}/checkout", cartId).contentType(MediaType.APPLICATION_JSON).content(checkoutBody(1)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CHECKED_OUT"))
+                .andExpect(jsonPath("$.items.length()").value(1));
+
+        mockMvc.perform(get("/carts/{id}", cartId))
+                .andExpect(jsonPath("$.status").value("CHECKED_OUT"));
+        mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/carts/{id}/checkout", cartId).contentType(MediaType.APPLICATION_JSON).content(checkoutBody(1)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CHECKED_OUT"))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].quantity").value(1));
+    }
+
+    @Test
+    void checkout_WithoutExpectedVersion_Returns400() throws Exception {
+        mockMvc.perform(post("/carts/{id}/checkout", createCart()).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed: expectedVersion: must not be null"));
+    }
+
+    @Test
+    void checkout_ProductWithdrawnAfterAdding_Returns409AndMarksItemUnavailable() throws Exception {
+        String cartId = createCart();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+        when(productCatalogPort.findProduct(productId)).thenReturn(Optional.empty());
+        mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"%s\",\"variantId\":\"%s\",\"quantity\":1}".formatted(productId, variantId)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/carts/{id}/checkout", cartId).contentType(MediaType.APPLICATION_JSON).content(checkoutBody(1)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("has changed since the order summary")));
+        mockMvc.perform(post("/carts/{id}/checkout", cartId).contentType(MediaType.APPLICATION_JSON).content(checkoutBody(2)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("no longer available: ProBook X15")));
+
+        mockMvc.perform(get("/carts/{id}", cartId))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.version").value(2))
+                .andExpect(jsonPath("$.items[0].available").value(false));
+    }
+
+    @Test
+    void changeItemQuantity_TwoItems_KeepsOrderOfItems() throws Exception {
+        String cartId = createCart();
+        UUID firstProductId = UUID.randomUUID();
+        UUID firstVariantId = UUID.randomUUID();
+        UUID secondProductId = UUID.randomUUID();
+        UUID secondVariantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(firstProductId)).thenReturn(product(firstProductId, firstVariantId, "AVAILABLE"));
+        when(productCatalogPort.getProduct(secondProductId)).thenReturn(product(secondProductId, secondVariantId, "AVAILABLE"));
+        mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"productId\":\"%s\",\"variantId\":\"%s\",\"quantity\":1}".formatted(firstProductId, firstVariantId)));
+        String response = mockMvc.perform(post("/carts/{id}/items", cartId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"%s\",\"variantId\":\"%s\",\"quantity\":1}".formatted(secondProductId, secondVariantId)))
+                .andReturn().getResponse().getContentAsString();
+        String firstItemId = objectMapper.readTree(response).get("items").get(0).get("id").asText();
+
+        for (int quantity = 2; quantity <= 4; quantity++) {
+            mockMvc.perform(patch("/carts/{id}/items/{itemId}", cartId, firstItemId)
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"quantity\":%d}".formatted(quantity)))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(get("/carts/{id}", cartId))
+                .andExpect(jsonPath("$.items[0].variantId").value(firstVariantId.toString()))
+                .andExpect(jsonPath("$.items[0].quantity").value(4))
+                .andExpect(jsonPath("$.items[1].variantId").value(secondVariantId.toString()));
+    }
+
+    @Test
+    void addItem_SentInParallel_KeepsEveryQuantityInOneItem() throws Exception {
+        UUID cartId = UUID.fromString(createCart());
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+        AddItemCommand command = AddItemCommand.builder().productId(productId).variantId(variantId).quantity(1).build();
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+
+        List<Future<Cart>> results = new ArrayList<>();
+        for (int request = 0; request < 10; request++) {
+            results.add(executor.submit(() -> cartService.addItem(cartId, command)));
+        }
+        for (Future<Cart> result : results) {
+            result.get(30, TimeUnit.SECONDS);
+        }
+        executor.shutdown();
+
+        Cart cart = cartService.getCartById(cartId);
+        assertAll(
+                () -> assertEquals(1, cart.getItems().size()),
+                () -> assertEquals(10, cart.getItems().get(0).getQuantity())
+        );
+    }
+
+    @Test
+    void addItemAndCheckout_SentInParallel_CheckedOutCartMatchesItsContent() throws Exception {
+        UUID cartId = UUID.fromString(createCart());
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        when(productCatalogPort.getProduct(productId)).thenReturn(product(productId, variantId, "AVAILABLE"));
+        when(productCatalogPort.findProduct(productId)).thenReturn(Optional.of(product(productId, variantId, "AVAILABLE")));
+        AddItemCommand command = AddItemCommand.builder().productId(productId).variantId(variantId).quantity(1).build();
+        long version = cartService.addItem(cartId, command).getVersion();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        Future<Cart> addition = executor.submit(() -> cartService.addItem(cartId, command));
+        Future<Cart> checkout = executor.submit(() -> cartService.checkout(cartId, version));
+        try {
+            Cart checkedOutCart = checkout.get(30, TimeUnit.SECONDS);
+            ExecutionException additionFailure = org.junit.jupiter.api.Assertions.assertThrows(
+                    ExecutionException.class, () -> addition.get(30, TimeUnit.SECONDS));
+            Cart cart = cartService.getCartById(cartId);
+            assertAll(
+                    () -> assertTrue(additionFailure.getCause() instanceof CartNotActiveException),
+                    () -> assertEquals(CartStatus.CHECKED_OUT, cart.getStatus()),
+                    () -> assertEquals(checkedOutCart.getItems().get(0).getQuantity(), cart.getItems().get(0).getQuantity())
+            );
+        } catch (ExecutionException checkoutFailure) {
+            addition.get(30, TimeUnit.SECONDS);
+            Cart cart = cartService.getCartById(cartId);
+            assertAll(
+                    () -> assertTrue(checkoutFailure.getCause() instanceof CartChangedException),
+                    () -> assertEquals(CartStatus.ACTIVE, cart.getStatus()),
+                    () -> assertEquals(2, cart.getItems().get(0).getQuantity())
+            );
+        } finally {
+            executor.shutdown();
+        }
+    }
+
+    private static String checkoutBody(long expectedVersion) {
+        return "{\"expectedVersion\":%d}".formatted(expectedVersion);
+    }
+}

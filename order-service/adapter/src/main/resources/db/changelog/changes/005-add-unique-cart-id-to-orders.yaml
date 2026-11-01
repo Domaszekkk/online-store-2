@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-add-unique-cart-id-to-orders
+      author: estore
+      comment: "One order per cart: checkout in cart-service is idempotent, so the guard against a second order from the same cart lives here"
+      changes:
+        - addUniqueConstraint:
+            tableName: orders
+            columnNames: cart_id
+            constraintName: uq_orders_cart_id
+      rollback:
+        - dropUniqueConstraint:
+            tableName: orders
+            constraintName: uq_orders_cart_id

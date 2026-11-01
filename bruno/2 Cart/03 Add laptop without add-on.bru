@@ -1,0 +1,38 @@
+meta {
+  name: 03 Add laptop without add-on
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{cartServiceUrl}}/carts/{{cartId}}/items
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{variantId}}",
+    "quantity": 1
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.items.length: eq 2
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("secondItemId", res.getBody().items.find(item => item.addOns.length === 0).id);
+  }
+}
+
+docs {
+  Same variant but a different set of add-ons, so it is a separate cart item.
+}

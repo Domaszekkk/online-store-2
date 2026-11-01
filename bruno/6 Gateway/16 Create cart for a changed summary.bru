@@ -1,0 +1,25 @@
+meta {
+  name: 16 Create cart for a changed summary
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{gatewayUrl}}/shop/carts
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("changedCartId", res.getBody().id);
+  }
+}
+
+docs {
+  Requests 16-20: the customer sees the summary, then changes the cart in another tab and clicks "Place order".
+}

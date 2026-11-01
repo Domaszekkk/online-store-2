@@ -1,0 +1,101 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-create-outbox-events-table
+      author: estore
+      comment: "Transactional outbox: DocumentIssued events are saved in the same transaction as the document and published to Kafka later"
+      changes:
+        - createTable:
+            tableName: outbox_events
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_outbox_events
+                    nullable: false
+              - column:
+                  name: aggregate_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payload
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: published_at
+                  type: TIMESTAMP WITH TIME ZONE
+        - createIndex:
+            tableName: outbox_events
+            indexName: idx_outbox_events_unpublished
+            columns:
+              - column:
+                  name: created_at
+            where: published_at IS NULL
+      rollback:
+        - dropTable:
+            tableName: outbox_events
+  - changeSet:
+      id: 007-add-document-indexes
+      author: estore
+      comment: "Indexes for loading document lines and VAT summaries by foreign key"
+      changes:
+        - createIndex:
+            tableName: document_lines
+            indexName: idx_document_lines_document_id
+            columns:
+              - column:
+                  name: document_id
+        - createIndex:
+            tableName: document_vat_summaries
+            indexName: idx_document_vat_summaries_document_id
+            columns:
+              - column:
+                  name: document_id
+      rollback:
+        - dropIndex:
+            tableName: document_vat_summaries
+            indexName: idx_document_vat_summaries_document_id
+        - dropIndex:
+            tableName: document_lines
+            indexName: idx_document_lines_document_id
+  - changeSet:
+      id: 008-drop-order-id-from-document-pdfs
+      author: estore
+      comment: "The PDF is found by its document; the order id is already stored in documents"
+      changes:
+        - dropUniqueConstraint:
+            tableName: document_pdfs
+            constraintName: uq_document_pdfs_order_id
+        - dropColumn:
+            tableName: document_pdfs
+            columnName: order_id
+      rollback:
+        - addColumn:
+            tableName: document_pdfs
+            columns:
+              - column:
+                  name: order_id
+                  type: UUID
+        - sql:
+            sql: UPDATE document_pdfs SET order_id = (SELECT order_id FROM documents WHERE documents.id = document_pdfs.document_id)
+        - addNotNullConstraint:
+            tableName: document_pdfs
+            columnName: order_id
+            columnDataType: UUID
+        - addUniqueConstraint:
+            tableName: document_pdfs
+            columnNames: order_id
+            constraintName: uq_document_pdfs_order_id

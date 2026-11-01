@@ -1,0 +1,53 @@
+meta {
+  name: 08 Preview order (screen 3)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{gatewayUrl}}/shop/orders/preview
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{gatewayCartId}}",
+    "customer": { "firstName": "Jan", "lastName": "Kowalski", "email": "{{customerEmail}}", "phone": "+48 600 100 200" },
+    "shippingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "billingAddress": {
+      "companyName": "Kowalski Sp. z o.o.",
+      "taxIdentificationNumber": "5260250274",
+      "street": "Firmowa 5", "city": "Kraków", "postalCode": "30-001", "country": "Polska"
+    },
+    "paymentMethod": "BLIK",
+    "deliveryMethod": "COURIER"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.orderNumber: isUndefined
+  res.body.customer.lastName: eq Kowalski
+  res.body.billingAddress.companyName: eq Kowalski Sp. z o.o.
+  res.body.lines[0].quantity: eq 2
+  res.body.lines[0].vatRate: isUndefined
+  res.body.deliveryCost.amount: eq 19.99
+  res.body.grandTotal.amount: eq 9256.99
+  res.body.cartVersion: isNumber
+}
+
+docs {
+  Screen 3 (summary): the data from screen 2 together with products, prices, delivery cost and the total.
+  Nothing is saved and the cart stays open; "Place order" on this screen sends the same data to POST /shop/orders.
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("gatewayCartVersion", res.getBody().cartVersion);
+  }
+}

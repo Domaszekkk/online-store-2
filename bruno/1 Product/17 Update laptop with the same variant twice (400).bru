@@ -1,0 +1,37 @@
+meta {
+  name: 17 Update laptop with the same variant twice (400)
+  type: http
+  seq: 17
+}
+
+put {
+  url: {{productServiceUrl}}/products/{{productId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "ProBook X15",
+    "type": "COMPUTER",
+    "description": "Laptop biznesowy 15.6 cala",
+    "basePrice": { "amount": 3999.00, "currency": "PLN" },
+    "variants": [
+      { "id": "{{variantId}}", "stockKeepingUnit": "PBX15-I7-16-{{runId}}", "optionValues": { "Procesor": "i7", "RAM": "16GB" }, "price": { "amount": 4599.00, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_23" },
+      { "id": "{{variantId}}", "stockKeepingUnit": "PBX15-I9-32-{{runId}}", "optionValues": { "Procesor": "i9", "RAM": "32GB" }, "price": { "amount": 5799.00, "currency": "PLN" }, "availability": "COMING_SOON", "vatRate": "VAT_23" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: contains is listed more than once
+}
+
+docs {
+  The same variant id given twice used to end with 500 from the database layer; now it is rejected with 400 and the laptop stays unchanged.
+}

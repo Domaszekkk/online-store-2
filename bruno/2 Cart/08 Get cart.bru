@@ -1,0 +1,29 @@
+meta {
+  name: 08 Get cart
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{cartServiceUrl}}/carts/{{cartId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq ACTIVE
+  res.body.items[0].quantity: eq 2
+  res.body.items[0].addOns[0].quantity: eq 2
+  res.body.total.amount: eq 9276
+}
+
+docs {
+  2 laptops (9198.00) + 2 cables (78.00) = 9276.00.
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("cartVersion", res.getBody().version);
+  }
+}

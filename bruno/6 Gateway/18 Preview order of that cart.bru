@@ -1,0 +1,40 @@
+meta {
+  name: 18 Preview order of that cart
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{gatewayUrl}}/shop/orders/preview
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{changedCartId}}",
+    "customer": { "firstName": "Jan", "lastName": "Kowalski", "email": "{{customerEmail}}", "phone": "+48 600 100 200" },
+    "shippingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "paymentMethod": "BLIK",
+    "deliveryMethod": "COURIER"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.grandTotal.amount: eq 4618.99
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("changedCartVersion", res.getBody().cartVersion);
+  }
+}
+
+docs {
+  The summary shows 4599.00 + 19.99 courier = 4618.99 and the cart version it was made from.
+}

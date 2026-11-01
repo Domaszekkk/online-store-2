@@ -1,0 +1,32 @@
+meta {
+  name: 09 Add quantity above the limit (400)
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{cartServiceUrl}}/carts/{{cartId}}/items
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{variantId}}",
+    "quantity": 100
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: eq Validation failed: quantity: must be less than or equal to 99
+}
+
+docs {
+  One cart line holds at most 99 pieces, also after quantities of the same configuration are summed.
+}

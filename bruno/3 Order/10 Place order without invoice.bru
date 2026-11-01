@@ -1,0 +1,43 @@
+meta {
+  name: 10 Place order without invoice
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{orderServiceUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{secondCartId}}",
+    "cartVersion": {{secondCartVersion}},
+    "customer": { "firstName": "Anna", "lastName": "Nowak", "email": "anna.nowak@example.com", "phone": "+48 600 200 300" },
+    "shippingAddress": { "street": "Długa 3", "city": "Gdańsk", "postalCode": "80-001", "country": "Polska" },
+    "paymentMethod": "CARD",
+    "deliveryMethod": "PARCEL_LOCKER"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.billingAddress: isNull
+  res.body.grandTotal.amount: eq 4611.99
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("confirmationOrderId", res.getBody().id);
+  }
+}
+
+docs {
+  No billingAddress (the customer did not tick "I want an invoice"), so invoice-service issues a purchase confirmation (PZ).
+  4599.00 + parcel locker 12.99 = 4611.99.
+}

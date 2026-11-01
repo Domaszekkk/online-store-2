@@ -1,0 +1,36 @@
+meta {
+  name: 15 Create product with stock keeping unit of the laptop (409)
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{productServiceUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "ProBook X15 kopia",
+    "type": "COMPUTER",
+    "basePrice": { "amount": 3999.00, "currency": "PLN" },
+    "variants": [
+      { "stockKeepingUnit": "PBX15-I7-16-{{runId}}", "price": { "amount": 3999.00, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_23" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.message: contains already used by another product on sale
+}
+
+docs {
+  A stock keeping unit identifies one item in stock, so two products on sale cannot share it.
+  It becomes free again once the product using it is archived.
+}

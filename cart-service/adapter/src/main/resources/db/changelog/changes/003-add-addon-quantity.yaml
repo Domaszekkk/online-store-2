@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-add-addon-quantity
+      author: estore
+      comment: "Add-ons have their own quantity (e.g. two laptops but one cable); existing rows default to 1"
+      changes:
+        - addColumn:
+            tableName: cart_item_addons
+            columns:
+              - column:
+                  name: quantity
+                  type: INT
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: cart_item_addons
+            columnName: quantity

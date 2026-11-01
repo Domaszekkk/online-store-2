@@ -1,0 +1,26 @@
+meta {
+  name: 14 Cancel completed order (409)
+  type: http
+  seq: 14
+}
+
+patch {
+  url: {{orderServiceUrl}}/orders/{{orderId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "CANCELLED"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.message: contains cannot change status from COMPLETED to CANCELLED
+}

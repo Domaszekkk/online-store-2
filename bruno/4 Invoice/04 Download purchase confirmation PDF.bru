@@ -1,0 +1,16 @@
+meta {
+  name: 04 Download purchase confirmation PDF
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{invoiceServiceUrl}}/documents/order/{{confirmationOrderId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: eq application/pdf
+}

@@ -1,0 +1,26 @@
+meta {
+  name: 19 Change quantity after the preview
+  type: http
+  seq: 19
+}
+
+patch {
+  url: {{gatewayUrl}}/shop/carts/{{changedCartId}}/items/{{changedItemId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "quantity": 3
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.total.amount: eq 13797
+}

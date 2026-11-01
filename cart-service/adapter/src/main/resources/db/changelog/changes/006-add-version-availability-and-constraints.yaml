@@ -1,0 +1,123 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-add-cart-version-and-item-availability
+      author: estore
+      comment: "Cart version grows with every change so an order is placed only from the content shown in the summary; items keep whether they can still be bought"
+      changes:
+        - addColumn:
+            tableName: carts
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - addColumn:
+            tableName: cart_items
+            columns:
+              - column:
+                  name: available
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropColumn:
+            tableName: carts
+            columnName: version
+        - dropColumn:
+            tableName: cart_items
+            columnName: available
+  - changeSet:
+      id: 008-add-cart-item-order
+      author: estore
+      comment: "Cart items keep the order in which they were added; existing rows are numbered once"
+      changes:
+        - addColumn:
+            tableName: cart_items
+            columns:
+              - column:
+                  name: item_order
+                  type: INT
+        - sql:
+            sql: >
+              UPDATE cart_items item
+              SET item_order = numbered.row_position
+              FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY cart_id ORDER BY id) - 1 AS row_position
+                    FROM cart_items) numbered
+              WHERE item.id = numbered.id
+      rollback:
+        - dropColumn:
+            tableName: cart_items
+            columnName: item_order
+  - changeSet:
+      id: 009-add-cart-not-null-constraints
+      author: estore
+      comment: "Columns that every cart, item and add-on must have"
+      changes:
+        - addNotNullConstraint:
+            tableName: carts
+            columnName: status
+        - addNotNullConstraint:
+            tableName: carts
+            columnName: total_amount
+        - addNotNullConstraint:
+            tableName: carts
+            columnName: total_currency
+        - addNotNullConstraint:
+            tableName: carts
+            columnName: created_at
+        - addNotNullConstraint:
+            tableName: carts
+            columnName: updated_at
+        - addNotNullConstraint:
+            tableName: cart_items
+            columnName: product_id
+        - addNotNullConstraint:
+            tableName: cart_items
+            columnName: variant_id
+        - addNotNullConstraint:
+            tableName: cart_items
+            columnName: product_name
+        - addNotNullConstraint:
+            tableName: cart_items
+            columnName: unit_price_amount
+        - addNotNullConstraint:
+            tableName: cart_items
+            columnName: unit_price_currency
+        - addNotNullConstraint:
+            tableName: cart_items
+            columnName: quantity
+        - addNotNullConstraint:
+            tableName: cart_items
+            columnName: line_total_amount
+        - addNotNullConstraint:
+            tableName: cart_items
+            columnName: line_total_currency
+        - addNotNullConstraint:
+            tableName: cart_item_addons
+            columnName: product_ref_id
+        - addNotNullConstraint:
+            tableName: cart_item_addons
+            columnName: name
+        - addNotNullConstraint:
+            tableName: cart_item_addons
+            columnName: price_amount
+        - addNotNullConstraint:
+            tableName: cart_item_addons
+            columnName: price_currency
+  - changeSet:
+      id: 010-add-cart-quantity-checks
+      author: estore
+      comment: "Quantities stay between 1 and 99; NOT VALID keeps rows written before the limit existed and checks every new or changed row"
+      changes:
+        - sql:
+            sql: >
+              ALTER TABLE cart_items ADD CONSTRAINT ck_cart_items_quantity CHECK (quantity BETWEEN 1 AND 99) NOT VALID;
+              ALTER TABLE cart_item_addons ADD CONSTRAINT ck_cart_item_addons_quantity CHECK (quantity BETWEEN 1 AND 99) NOT VALID
+      rollback:
+        - sql:
+            sql: >
+              ALTER TABLE cart_items DROP CONSTRAINT ck_cart_items_quantity;
+              ALTER TABLE cart_item_addons DROP CONSTRAINT ck_cart_item_addons_quantity

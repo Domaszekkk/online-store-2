@@ -1,0 +1,40 @@
+meta {
+  name: 08 Create temporary product
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{productServiceUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Ksiazka testowa",
+    "type": "ELECTRONICS",
+    "basePrice": { "amount": 49.90, "currency": "PLN" },
+    "variants": [
+      { "stockKeepingUnit": "BOOK-1-{{runId}}", "price": { "amount": 49.90, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_5" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("temporaryProductId", res.getBody().id);
+  }
+}
+
+docs {
+  Product used only for update and delete, so the laptop from 02 stays untouched for the next folders.
+}

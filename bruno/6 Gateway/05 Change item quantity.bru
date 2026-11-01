@@ -1,0 +1,32 @@
+meta {
+  name: 05 Change item quantity
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{gatewayUrl}}/shop/carts/{{gatewayCartId}}/items/{{gatewayItemId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "quantity": 2
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.items[0].quantity: eq 2
+  res.body.items[0].addOns[0].quantity: eq 1
+  res.body.total.amount: eq 9237
+}
+
+docs {
+  2 laptops (2 x 4599.00) + 1 cable (39.00) = 9237.00. The add-on keeps its own quantity.
+}

@@ -1,0 +1,32 @@
+databaseChangeLog:
+  - changeSet:
+      id: 011-add-cart-expiration
+      author: estore
+      comment: "An active cart expires after 30 minutes of inactivity; existing carts get the deadline counted from their last change"
+      changes:
+        - addColumn:
+            tableName: carts
+            columns:
+              - column:
+                  name: expires_at
+                  type: TIMESTAMP WITH TIME ZONE
+        - sql:
+            sql: UPDATE carts SET expires_at = updated_at + INTERVAL '30 minutes'
+        - addNotNullConstraint:
+            tableName: carts
+            columnName: expires_at
+        - createIndex:
+            tableName: carts
+            indexName: idx_carts_status_expires_at
+            columns:
+              - column:
+                  name: status
+              - column:
+                  name: expires_at
+      rollback:
+        - dropIndex:
+            tableName: carts
+            indexName: idx_carts_status_expires_at
+        - dropColumn:
+            tableName: carts
+            columnName: expires_at

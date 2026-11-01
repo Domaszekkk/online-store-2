@@ -1,0 +1,30 @@
+meta {
+  name: 01 Get products by type
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{gatewayUrl}}/shop/products?type=COMPUTER
+  body: none
+  auth: none
+}
+
+params:query {
+  type: COMPUTER
+}
+
+assert {
+  res.status: eq 200
+  res.body.items: isNotEmpty
+  res.body.page: eq 0
+  res.body.size: eq 20
+  res.body.items[0].type: eq COMPUTER
+  res.body.items[0].basePrice: isDefined
+  res.body.items[0].variants: isUndefined
+}
+
+docs {
+  Screen 1 (product list). The gateway returns only id, name, type and basePrice.
+  Products are created in folder 1 (product management is not exposed by the gateway).
+}

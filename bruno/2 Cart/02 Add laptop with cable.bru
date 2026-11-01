@@ -1,0 +1,44 @@
+meta {
+  name: 02 Add laptop with cable
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{cartServiceUrl}}/carts/{{cartId}}/items
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "productId": "{{productId}}",
+    "variantId": "{{variantId}}",
+    "quantity": 2,
+    "addOns": [
+      { "productId": "{{addOnProductId}}", "quantity": 1 }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.total.amount: eq 9237
+  res.body.items[0].vatRate: eq VAT_23
+  res.body.items[0].addOns[0].vatRate: eq VAT_23
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("itemId", res.getBody().items.find(item => item.addOns.length > 0).id);
+  }
+}
+
+docs {
+  2 laptops (2 x 4599.00) + 1 cable (39.00) = 9237.00. The add-on has its own quantity.
+  Price, name, SKU and VAT rate are copied from product-service (snapshot).
+}

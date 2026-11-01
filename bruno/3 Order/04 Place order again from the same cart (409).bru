@@ -1,0 +1,35 @@
+meta {
+  name: 04 Place order again from the same cart (409)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{orderServiceUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{cartId}}",
+    "cartVersion": {{cartVersion}},
+    "customer": { "firstName": "Jan", "lastName": "Kowalski", "email": "{{customerEmail}}", "phone": "+48 600 100 200" },
+    "shippingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "paymentMethod": "BLIK",
+    "deliveryMethod": "COURIER"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.message: contains has already been placed from cart
+}
+
+docs {
+  One order per cart: the message contains the number of the first order.
+}

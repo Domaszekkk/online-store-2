@@ -1,0 +1,41 @@
+meta {
+  name: 07 Place order with invalid NIP (400)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{gatewayUrl}}/shop/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{gatewayCartId}}",
+    "cartVersion": 0,
+    "customer": { "firstName": "Jan", "lastName": "Kowalski", "email": "{{customerEmail}}", "phone": "+48 600 100 200" },
+    "shippingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "billingAddress": {
+      "companyName": "Kowalski Sp. z o.o.",
+      "taxIdentificationNumber": "5260250275",
+      "street": "Firmowa 5", "city": "Kraków", "postalCode": "30-001", "country": "Polska"
+    },
+    "paymentMethod": "BLIK",
+    "deliveryMethod": "COURIER"
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: contains taxIdentificationNumber
+}
+
+docs {
+  The NIP checksum is validated by order-service; the gateway passes its 400 and message to the frontend.
+  The cart stays open, so the order can still be previewed and placed.
+}

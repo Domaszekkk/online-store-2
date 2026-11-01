@@ -1,0 +1,37 @@
+meta {
+  name: 16 Update cable with variant of the laptop (400)
+  type: http
+  seq: 16
+}
+
+put {
+  url: {{productServiceUrl}}/products/{{addOnProductId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Kabel HDMI 2m",
+    "type": "ELECTRONICS",
+    "description": "Kabel HDMI 2.1",
+    "basePrice": { "amount": 39.00, "currency": "PLN" },
+    "variants": [
+      { "id": "{{variantId}}", "stockKeepingUnit": "HDMI-2M-{{runId}}", "price": { "amount": 39.00, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_23" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: contains does not belong to product
+}
+
+docs {
+  A variant id from another product is rejected, so one product cannot take over a variant of another one.
+  The laptop keeps its variant (checked by the cart requests in folder 2).
+}

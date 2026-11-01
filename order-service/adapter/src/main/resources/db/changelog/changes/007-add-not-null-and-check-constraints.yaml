@@ -1,0 +1,118 @@
+databaseChangeLog:
+  - changeSet:
+      id: 010-add-order-not-null-constraints
+      author: estore
+      comment: "Columns that every order, order line and add-on must have; billing data and document number stay optional"
+      changes:
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: cart_id
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: status
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: customer_first_name
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: customer_last_name
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: customer_email
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: customer_phone
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: shipping_street
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: shipping_city
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: shipping_postal_code
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: shipping_country
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: payment_method
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: delivery_method
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: items_total_amount
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: items_total_currency
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: delivery_cost_amount
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: delivery_cost_currency
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: grand_total_amount
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: grand_total_currency
+        - addNotNullConstraint:
+            tableName: orders
+            columnName: created_at
+        - addNotNullConstraint:
+            tableName: order_lines
+            columnName: product_id
+        - addNotNullConstraint:
+            tableName: order_lines
+            columnName: variant_id
+        - addNotNullConstraint:
+            tableName: order_lines
+            columnName: product_name
+        - addNotNullConstraint:
+            tableName: order_lines
+            columnName: unit_price_amount
+        - addNotNullConstraint:
+            tableName: order_lines
+            columnName: unit_price_currency
+        - addNotNullConstraint:
+            tableName: order_lines
+            columnName: quantity
+        - addNotNullConstraint:
+            tableName: order_lines
+            columnName: line_total_amount
+        - addNotNullConstraint:
+            tableName: order_lines
+            columnName: line_total_currency
+        - addNotNullConstraint:
+            tableName: order_line_addons
+            columnName: product_ref_id
+        - addNotNullConstraint:
+            tableName: order_line_addons
+            columnName: name
+        - addNotNullConstraint:
+            tableName: order_line_addons
+            columnName: price_amount
+        - addNotNullConstraint:
+            tableName: order_line_addons
+            columnName: price_currency
+        - addNotNullConstraint:
+            tableName: order_line_addons
+            columnName: quantity
+  - changeSet:
+      id: 011-add-order-quantity-and-amount-checks
+      author: estore
+      comment: "Quantities are positive and amounts are not negative"
+      changes:
+        - sql:
+            sql: >
+              ALTER TABLE order_lines ADD CONSTRAINT ck_order_lines_quantity_positive CHECK (quantity > 0);
+              ALTER TABLE order_line_addons ADD CONSTRAINT ck_order_line_addons_quantity_positive CHECK (quantity > 0);
+              ALTER TABLE orders ADD CONSTRAINT ck_orders_grand_total_not_negative CHECK (grand_total_amount >= 0)
+      rollback:
+        - sql:
+            sql: >
+              ALTER TABLE order_lines DROP CONSTRAINT ck_order_lines_quantity_positive;
+              ALTER TABLE order_line_addons DROP CONSTRAINT ck_order_line_addons_quantity_positive;
+              ALTER TABLE orders DROP CONSTRAINT ck_orders_grand_total_not_negative

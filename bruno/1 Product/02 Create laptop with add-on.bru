@@ -1,0 +1,60 @@
+meta {
+  name: 02 Create laptop with add-on
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{productServiceUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "ProBook X15",
+    "type": "COMPUTER",
+    "description": "Laptop biznesowy 15.6 cala",
+    "basePrice": { "amount": 3999.00, "currency": "PLN" },
+    "attributes": { "ekran": "15.6", "waga": "1.7kg" },
+    "options": [
+      { "name": "Procesor", "position": 1, "values": ["i5", "i7", "i9"] },
+      { "name": "RAM", "position": 2, "values": ["8GB", "16GB", "32GB"] }
+    ],
+    "variants": [
+      { "stockKeepingUnit": "PBX15-I7-16-{{runId}}", "optionValues": { "Procesor": "i7", "RAM": "16GB" }, "price": { "amount": 4599.00, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_23" },
+      { "stockKeepingUnit": "PBX15-I9-32-{{runId}}", "optionValues": { "Procesor": "i9", "RAM": "32GB" }, "price": { "amount": 5799.00, "currency": "PLN" }, "availability": "COMING_SOON", "vatRate": "VAT_23" }
+    ],
+    "addOns": [
+      { "productId": "{{addOnProductId}}" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.variants.length: eq 2
+  res.body.addOns[0].name: eq Kabel HDMI 2m
+  res.body.addOns[0].price.amount: eq 39
+  res.body.addOns[0].vatRate: eq VAT_23
+  res.body.addOns[0].availability: eq AVAILABLE
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    const body = res.getBody();
+    bru.setEnvVar("productId", body.id);
+    bru.setEnvVar("variantId", body.variants.find(variant => variant.availability === "AVAILABLE").id);
+    bru.setEnvVar("unavailableVariantId", body.variants.find(variant => variant.availability !== "AVAILABLE").id);
+  }
+}
+
+docs {
+  Laptop with two variants (i7 available, i9 coming soon) and the HDMI cable as an add-on.
+  The add-on is given only by the cable id; its name, price, VAT rate and availability always come from the cable product.
+  Saves productId, variantId (available) and unavailableVariantId.
+}

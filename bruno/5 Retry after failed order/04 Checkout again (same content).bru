@@ -1,0 +1,31 @@
+meta {
+  name: 04 Checkout again (same content)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{cartServiceUrl}}/carts/{{retryCartId}}/checkout
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "expectedVersion": {{retryCartVersion}}
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq CHECKED_OUT
+  res.body.items.length: eq 1
+}
+
+docs {
+  Checkout is idempotent: a closed cart returns the same content instead of 409, so order-service can retry it.
+}

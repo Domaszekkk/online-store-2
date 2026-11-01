@@ -1,0 +1,40 @@
+meta {
+  name: 01 Place order with invalid NIP (400)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{orderServiceUrl}}/orders
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "cartId": "{{cartId}}",
+    "cartVersion": {{cartVersion}},
+    "customer": { "firstName": "Jan", "lastName": "Kowalski", "email": "{{customerEmail}}", "phone": "+48 600 100 200" },
+    "shippingAddress": { "street": "Marszałkowska 1", "city": "Warszawa", "postalCode": "00-001", "country": "Polska" },
+    "billingAddress": {
+      "companyName": "Kowalski Sp. z o.o.",
+      "taxIdentificationNumber": "1234567890",
+      "street": "Firmowa 5", "city": "Kraków", "postalCode": "30-001", "country": "Polska"
+    },
+    "paymentMethod": "BLIK",
+    "deliveryMethod": "COURIER"
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.message: contains taxIdentificationNumber
+}
+
+docs {
+  NIP 1234567890 has a wrong checksum. The request is rejected before the cart is touched (the cart stays ACTIVE).
+}

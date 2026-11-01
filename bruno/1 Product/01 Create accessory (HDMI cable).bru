@@ -1,0 +1,47 @@
+meta {
+  name: 01 Create accessory (HDMI cable)
+  type: http
+  seq: 1
+}
+
+script:pre-request {
+  bru.setEnvVar("runId", String(Date.now()).slice(-8));
+}
+
+post {
+  url: {{productServiceUrl}}/products
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Kabel HDMI 2m",
+    "type": "ELECTRONICS",
+    "description": "Kabel HDMI 2.1",
+    "basePrice": { "amount": 39.00, "currency": "PLN" },
+    "variants": [
+      { "stockKeepingUnit": "HDMI-2M-{{runId}}", "price": { "amount": 39.00, "currency": "PLN" }, "availability": "AVAILABLE", "vatRate": "VAT_23" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("addOnProductId", res.getBody().id);
+  }
+}
+
+docs {
+  Creates the accessory first, because an add-on of the laptop must point to an existing product.
+  Saves its id as addOnProductId. Stock keeping units get the run number runId, because a product on sale
+  cannot reuse the stock keeping unit of another product on sale and the collection is run many times.
+}

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org" lang="pl">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${title + ' ' + document.number}">Faktura VAT</title>
+    <style>
+        @page { size: A4; margin: 18mm 15mm; }
+        body { font-family: 'DejaVu Sans'; font-size: 9pt; color: #1f2328; }
+        h1 { font-size: 16pt; margin: 0 0 2mm 0; }
+        .number { font-size: 11pt; font-weight: bold; margin-bottom: 6mm; }
+        .meta { width: 100%; margin-bottom: 6mm; }
+        .meta td { padding: 0.6mm 0; }
+        .meta .label { color: #57606a; width: 38mm; }
+        .parties { width: 100%; margin-bottom: 7mm; border-collapse: collapse; }
+        .parties td { width: 50%; vertical-align: top; padding: 3mm; border: 0.3mm solid #d0d7de; }
+        .parties .heading { font-weight: bold; text-transform: uppercase; font-size: 8pt; color: #57606a; margin-bottom: 1.5mm; }
+        .parties .name { font-weight: bold; }
+        table.lines, table.summary { width: 100%; border-collapse: collapse; }
+        table.lines th, table.summary th { background: #f0f2f4; font-weight: bold; font-size: 8pt; text-align: left; padding: 1.8mm 1.5mm; border-bottom: 0.3mm solid #8c959f; }
+        table.lines td, table.summary td { padding: 1.6mm 1.5mm; border-bottom: 0.2mm solid #d0d7de; }
+        .amount { text-align: right; white-space: nowrap; }
+        table.lines th.amount, table.summary th.amount { text-align: right; }
+        .sku { color: #57606a; font-size: 7.5pt; }
+        .summary-block { width: 95mm; margin-left: auto; margin-top: 6mm; }
+        .total { margin-top: 4mm; font-size: 12pt; font-weight: bold; text-align: right; }
+        .note { margin-top: 10mm; color: #57606a; font-size: 8pt; }
+    </style>
+</head>
+<body>
+<h1 th:text="${title}">Faktura VAT</h1>
+<div class="number" th:text="${'Nr ' + document.number}">Nr FV/2026/10/000001</div>
+
+<table class="meta">
+    <tr><td class="label">Data wystawienia:</td><td th:text="${issueDate}">16.10.2026</td></tr>
+    <tr><td class="label">Data sprzedaży:</td><td th:text="${saleDate}">16.10.2026</td></tr>
+    <tr><td class="label">Numer zamówienia:</td><td th:text="${document.orderNumber}">ORD-2026-000001</td></tr>
+    <tr><td class="label">Sposób płatności:</td><td th:text="${paymentMethod}">BLIK</td></tr>
+</table>
+
+<table class="parties">
+    <tr>
+        <td>
+            <div class="heading">Sprzedawca</div>
+            <div class="name" th:text="${document.seller.name}">E-Store Sp. z o.o.</div>
+            <div th:text="${document.seller.street}">ul. Przykładowa 1</div>
+            <div th:text="${document.seller.postalCode + ' ' + document.seller.city}">00-001 Warszawa</div>
+            <div th:text="${document.seller.country}">Polska</div>
+            <div th:text="${'NIP: ' + document.seller.taxIdentificationNumber}">NIP: 0000000000</div>
+            <div th:if="${document.seller.bankAccountNumber != null}" th:text="${'Konto: ' + document.seller.bankAccountNumber}">Konto</div>
+        </td>
+        <td th:if="${invoice}">
+            <div class="heading">Nabywca</div>
+            <th:block th:if="${document.buyer.company}">
+                <div class="name" th:text="${document.buyer.companyName}">Firma</div>
+                <div th:text="${document.buyer.street}">ul. Firmowa 5</div>
+                <div th:text="${document.buyer.postalCode + ' ' + document.buyer.city}">30-001 Kraków</div>
+                <div th:text="${document.buyer.country}">Polska</div>
+                <div th:text="${'NIP: ' + document.buyer.taxIdentificationNumber}">NIP</div>
+            </th:block>
+            <th:block th:unless="${document.buyer.company}">
+                <div class="name" th:text="${document.buyer.fullName}">Jan Kowalski</div>
+                <div th:text="${document.buyer.street}">ul. Domowa 7</div>
+                <div th:text="${document.buyer.postalCode + ' ' + document.buyer.city}">80-001 Gdańsk</div>
+                <div th:text="${document.buyer.country}">Polska</div>
+            </th:block>
+        </td>
+        <td th:unless="${invoice}">
+            <div class="heading">Dokument</div>
+            <div>Potwierdzenie zakupu nie jest fakturą VAT.</div>
+            <div>Klient nie zamówił faktury do tego zamówienia.</div>
+        </td>
+    </tr>
+</table>
+
+<table class="lines">
+    <thead>
+    <tr>
+        <th>Lp.</th>
+        <th>Nazwa</th>
+        <th class="amount">Ilość</th>
+        <th class="amount">Cena brutto</th>
+        <th class="amount">VAT</th>
+        <th class="amount">Netto</th>
+        <th class="amount">Kwota VAT</th>
+        <th class="amount">Brutto</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="line : ${document.lines}">
+        <td th:text="${line.position}">1</td>
+        <td>
+            <div th:text="${line.name}">ProBook X15</div>
+            <div class="sku" th:if="${line.stockKeepingUnit != null}" th:text="${'SKU: ' + line.stockKeepingUnit}">SKU</div>
+        </td>
+        <td class="amount" th:text="${line.quantity + ' szt.'}">2 szt.</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(line.unitGrossPrice.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">4 599,00 zł</td>
+        <td class="amount" th:text="${vatRateLabels[line.vatRate.name()]}">23%</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(line.netTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">7 478,05 zł</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(line.vatTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">1 719,95 zł</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(line.grossTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">9 198,00 zł</td>
+    </tr>
+    </tbody>
+</table>
+
+<div class="summary-block">
+    <table class="summary">
+        <thead>
+        <tr>
+            <th>Stawka VAT</th>
+            <th class="amount">Netto</th>
+            <th class="amount">Kwota VAT</th>
+            <th class="amount">Brutto</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="summary : ${document.vatSummaries}">
+            <td th:text="${vatRateLabels[summary.vatRate.name()]}">23%</td>
+            <td class="amount" th:text="${#numbers.formatDecimal(summary.netTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">0,00 zł</td>
+            <td class="amount" th:text="${#numbers.formatDecimal(summary.vatTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">0,00 zł</td>
+            <td class="amount" th:text="${#numbers.formatDecimal(summary.grossTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">0,00 zł</td>
+        </tr>
+        <tr>
+            <td><b>Razem</b></td>
+            <td class="amount" th:text="${#numbers.formatDecimal(document.netTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">0,00 zł</td>
+            <td class="amount" th:text="${#numbers.formatDecimal(document.vatTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">0,00 zł</td>
+            <td class="amount" th:text="${#numbers.formatDecimal(document.grossTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">0,00 zł</td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="total" th:text="${totalLabel + ': ' + #numbers.formatDecimal(document.grossTotal.amount, 1, 'WHITESPACE', 2, 'COMMA') + ' zł'}">Do zapłaty: 0,00 zł</div>
+</div>
+
+<div class="note" th:if="${invoice}">Ceny zawierają podatek VAT. Kwoty VAT w podsumowaniu wyliczono od sumy cen brutto w każdej stawce.</div>
+</body>
+</html>
